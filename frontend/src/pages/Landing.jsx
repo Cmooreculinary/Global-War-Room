@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import Layout from "@/components/Layout";
-import CortexSVG from "@/components/CortexSVG";
+import CortexHero from "@/components/CortexHero";
 
 export default function Landing() {
   return (
@@ -95,7 +95,7 @@ export default function Landing() {
               transition={{ duration: 1.2, ease: "easeOut" }}
               className="relative"
             >
-              <CortexSVG />
+              <CortexHero />
             </motion.div>
           </div>
         </div>
