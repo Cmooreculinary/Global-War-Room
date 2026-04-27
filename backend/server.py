@@ -1,88 +1,218 @@
-from fastapi import FastAPI, APIRouter
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-import os
+"""Cerebral Cortex — FastAPI backend."""
 import logging
-from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
+import os
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import List, Optional
 
+from dotenv import load_dotenv
+from fastapi import APIRouter, FastAPI, HTTPException, Query
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel, ConfigDict, Field
+from starlette.middleware.cors import CORSMiddleware
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / ".env")
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
+from cortex_service import deliberate_chamber, deliberate_forge  # noqa: E402
+from personas import CHAMBERS  # noqa: E402
+
+mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[os.environ["DB_NAME"]]
 
-# Create the main app without a prefix
-app = FastAPI()
-
-# Create a router with the /api prefix
+app = FastAPI(title="Cerebral Cortex")
 api_router = APIRouter(prefix="/api")
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
+
+# --------------------------------------------------------------------------- #
+# Models                                                                      #
+# --------------------------------------------------------------------------- #
+
+class CouncilMember(BaseModel):
+    id: str
+    name: str
+    lineage: str
+    glyph: str
+    voice_notes: str
+
+
+class ChamberInfo(BaseModel):
+    id: str
+    name: str
+    domain: str
+    biology: str
+    tagline: str
+    placeholder: str
+    cta: str
+    loading: str
+    error: str
+    council: List[CouncilMember]
+
+
+class DeliberateRequest(BaseModel):
+    chamber_id: str
+    question: str
+    archive_id: Optional[str] = None  # browser session id for archive ownership
+
+
+class DeliberationContribution(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    member: str
+    contribution: str
+    dissent: bool = False
+
+
+class Verdict(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    chamber_id: str
+    chamber: str
+    question: str
+    deliberation: List[DeliberationContribution]
+    verdict: str
+    witnesses_called: Optional[List[str]] = None
+    archive_id: Optional[str] = None
+    saved: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
 
-# Add your routes to the router instead of directly to app
+class SaveRequest(BaseModel):
+    archive_id: str
+
+
+# --------------------------------------------------------------------------- #
+# Routes                                                                      #
+# --------------------------------------------------------------------------- #
+
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"app": "Cerebral Cortex", "tagline": "Real wisdom is never one voice."}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
+@api_router.get("/chambers", response_model=List[ChamberInfo])
+async def list_chambers():
+    return [ChamberInfo(**CHAMBERS[cid]) for cid in CHAMBERS]
 
-# Include the router in the main app
+
+@api_router.get("/chambers/{chamber_id}", response_model=ChamberInfo)
+async def get_chamber(chamber_id: str):
+    if chamber_id not in CHAMBERS:
+        raise HTTPException(status_code=404, detail="Chamber not found")
+    return ChamberInfo(**CHAMBERS[chamber_id])
+
+
+@api_router.post("/deliberate", response_model=Verdict)
+async def deliberate(req: DeliberateRequest):
+    if not req.question.strip():
+        raise HTTPException(status_code=400, detail="Question is required")
+    if req.chamber_id not in CHAMBERS:
+        raise HTTPException(status_code=404, detail="Chamber not found")
+
+    try:
+        if req.chamber_id == "forge":
+            payload = await deliberate_forge(req.question)
+        else:
+            payload = await deliberate_chamber(req.chamber_id, req.question)
+    except Exception as e:
+        logger.exception("Deliberation failed")
+        raise HTTPException(
+            status_code=502,
+            detail=CHAMBERS[req.chamber_id]["error"],
+        ) from e
+
+    verdict = Verdict(
+        chamber_id=req.chamber_id,
+        chamber=payload.get("chamber", CHAMBERS[req.chamber_id]["name"]),
+        question=req.question,
+        deliberation=[
+            DeliberationContribution(**d) for d in payload.get("deliberation", [])
+        ],
+        verdict=payload.get("verdict", ""),
+        witnesses_called=payload.get("witnesses_called"),
+        archive_id=req.archive_id,
+        saved=False,
+    )
+
+    doc = verdict.model_dump()
+    doc["created_at"] = doc["created_at"].isoformat()
+    await db.verdicts.insert_one(doc)
+    return verdict
+
+
+@api_router.get("/verdicts/{verdict_id}", response_model=Verdict)
+async def get_verdict(verdict_id: str):
+    doc = await db.verdicts.find_one({"id": verdict_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Verdict not found")
+    if isinstance(doc.get("created_at"), str):
+        doc["created_at"] = datetime.fromisoformat(doc["created_at"])
+    return Verdict(**doc)
+
+
+@api_router.post("/verdicts/{verdict_id}/save", response_model=Verdict)
+async def save_verdict(verdict_id: str, req: SaveRequest):
+    doc = await db.verdicts.find_one({"id": verdict_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Verdict not found")
+    await db.verdicts.update_one(
+        {"id": verdict_id},
+        {"$set": {"saved": True, "archive_id": req.archive_id}},
+    )
+    doc["saved"] = True
+    doc["archive_id"] = req.archive_id
+    if isinstance(doc.get("created_at"), str):
+        doc["created_at"] = datetime.fromisoformat(doc["created_at"])
+    return Verdict(**doc)
+
+
+@api_router.delete("/verdicts/{verdict_id}")
+async def delete_verdict(verdict_id: str, archive_id: str = Query(...)):
+    result = await db.verdicts.update_one(
+        {"id": verdict_id, "archive_id": archive_id},
+        {"$set": {"saved": False}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Verdict not found in archive")
+    return {"ok": True}
+
+
+@api_router.get("/verdicts", response_model=List[Verdict])
+async def list_archive(archive_id: str = Query(...)):
+    cursor = db.verdicts.find(
+        {"archive_id": archive_id, "saved": True},
+        {"_id": 0},
+    ).sort("created_at", -1)
+    docs = await cursor.to_list(500)
+    out: List[Verdict] = []
+    for doc in docs:
+        if isinstance(doc.get("created_at"), str):
+            doc["created_at"] = datetime.fromisoformat(doc["created_at"])
+        out.append(Verdict(**doc))
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# App wiring                                                                  #
+# --------------------------------------------------------------------------- #
+
 app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

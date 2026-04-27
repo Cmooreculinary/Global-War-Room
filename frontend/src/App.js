@@ -1,50 +1,41 @@
-import { useEffect } from "react";
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from "sonner";
+
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
-
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
-
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
+import Landing from "@/pages/Landing";
+import ChamberPage from "@/pages/ChamberPage";
+import ForgePage from "@/pages/ForgePage";
+import VerdictPage from "@/pages/VerdictPage";
+import ArchivePage from "@/pages/ArchivePage";
+import AboutPage from "@/pages/AboutPage";
 
 function App() {
   return (
     <div className="App">
       <BrowserRouter>
+        <Toaster
+          position="bottom-center"
+          theme="dark"
+          toastOptions={{
+            style: {
+              background: "#14141C",
+              color: "#E8E4DC",
+              border: "1px solid #2A2A36",
+              fontFamily: "'DM Sans', sans-serif",
+              borderRadius: 2,
+            },
+          }}
+        />
         <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
+          <Route path="/" element={<Landing />} />
+          <Route path="/forge" element={<ForgePage />} />
+          <Route path="/chamber/:id" element={<ChamberPage />} />
+          <Route path="/chamber/forge" element={<Navigate to="/forge" replace />} />
+          <Route path="/verdict/:id" element={<VerdictPage />} />
+          <Route path="/archive" element={<ArchivePage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </div>

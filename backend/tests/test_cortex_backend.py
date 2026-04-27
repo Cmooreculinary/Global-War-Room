@@ -1,0 +1,200 @@
+"""Cerebral Cortex backend tests — chambers, deliberation, archive."""
+import os
+import time
+import uuid
+import pytest
+import requests
+
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8001").rstrip("/")
+# Use localhost for backend-only tests (faster, avoids ingress timeouts)
+LOCAL_URL = "http://localhost:8001"
+API = f"{LOCAL_URL}/api"
+
+ARCHIVE_ID = f"test-archive-cortex-{uuid.uuid4().hex[:8]}"
+WRONG_ARCHIVE_ID = f"wrong-archive-{uuid.uuid4().hex[:8]}"
+
+
+@pytest.fixture(scope="module")
+def http():
+    s = requests.Session()
+    s.headers.update({"Content-Type": "application/json"})
+    return s
+
+
+# ---- Metadata ----------------------------------------------------------- #
+def test_root_metadata(http):
+    r = http.get(f"{API}/", timeout=10)
+    assert r.status_code == 200
+    data = r.json()
+    assert "app" in data and "tagline" in data
+    assert data["app"] == "Cerebral Cortex"
+
+
+# ---- Chambers ----------------------------------------------------------- #
+def test_list_chambers(http):
+    r = http.get(f"{API}/chambers", timeout=10)
+    assert r.status_code == 200
+    data = r.json()
+    assert isinstance(data, list)
+    ids = {c["id"] for c in data}
+    assert ids == {"senate", "boardroom", "courtroom", "council", "forge"}
+    required = {"id", "name", "domain", "biology", "tagline",
+                "placeholder", "cta", "loading", "error", "council"}
+    for c in data:
+        assert required.issubset(c.keys()), f"missing keys in {c['id']}"
+        assert "_id" not in c
+
+
+def test_chamber_senate_council(http):
+    r = http.get(f"{API}/chambers/senate", timeout=10)
+    assert r.status_code == 200
+    data = r.json()
+    council = data["council"]
+    assert len(council) == 3
+    ids = {m["id"] for m in council}
+    assert ids == {"statesman", "strategist", "guardian"}
+    for m in council:
+        for k in ("id", "name", "lineage", "glyph", "voice_notes"):
+            assert k in m and m[k]
+
+
+def test_chamber_forge_council(http):
+    r = http.get(f"{API}/chambers/forge", timeout=10)
+    assert r.status_code == 200
+    council = r.json()["council"]
+    assert len(council) == 1
+    assert council[0]["id"] == "integrator"
+
+
+def test_chamber_unknown_404(http):
+    r = http.get(f"{API}/chambers/unknown", timeout=10)
+    assert r.status_code == 404
+
+
+# ---- Deliberation: validation ------------------------------------------ #
+def test_deliberate_empty_question_400(http):
+    r = http.post(f"{API}/deliberate", json={
+        "chamber_id": "senate", "question": "   ", "archive_id": ARCHIVE_ID
+    }, timeout=15)
+    assert r.status_code == 400
+
+
+def test_deliberate_unknown_chamber_404(http):
+    r = http.post(f"{API}/deliberate", json={
+        "chamber_id": "nope", "question": "x", "archive_id": ARCHIVE_ID
+    }, timeout=15)
+    assert r.status_code == 404
+
+
+# ---- Deliberation: real LLM (Senate) ----------------------------------- #
+@pytest.fixture(scope="module")
+def senate_verdict(http):
+    payload = {
+        "chamber_id": "senate",
+        "question": "Should I let go of my co-founder who is no longer growing?",
+        "archive_id": ARCHIVE_ID,
+    }
+    t0 = time.time()
+    r = http.post(f"{API}/deliberate", json=payload, timeout=180)
+    print(f"\nSenate deliberation: {time.time()-t0:.1f}s, status={r.status_code}")
+    if r.status_code != 200:
+        pytest.fail(f"Senate deliberate failed: {r.status_code} {r.text[:500]}")
+    return r.json()
+
+
+def test_senate_deliberation_shape(senate_verdict):
+    v = senate_verdict
+    assert v["chamber"] == "The Senate"
+    assert v["chamber_id"] == "senate"
+    assert isinstance(v["id"], str) and len(v["id"]) > 0
+    assert isinstance(v["verdict"], str) and len(v["verdict"]) > 20
+    assert "_id" not in v
+    delib = v["deliberation"]
+    assert len(delib) >= 3, f"Expected 3 senate members, got {len(delib)}"
+    members = {d["member"] for d in delib}
+    expected = {"The Statesman", "The Strategist", "The Guardian"}
+    assert expected.issubset(members), f"missing members: {expected - members}"
+    for d in delib:
+        assert "contribution" in d and d["contribution"]
+        assert "dissent" in d
+
+
+# ---- Verdict retrieval / save / archive ------------------------------- #
+def test_get_verdict_by_id(http, senate_verdict):
+    vid = senate_verdict["id"]
+    r = http.get(f"{API}/verdicts/{vid}", timeout=15)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["id"] == vid
+    assert "_id" not in data
+
+
+def test_get_verdict_404(http):
+    r = http.get(f"{API}/verdicts/nonexistent-id", timeout=10)
+    assert r.status_code == 404
+
+
+def test_save_verdict(http, senate_verdict):
+    vid = senate_verdict["id"]
+    r = http.post(f"{API}/verdicts/{vid}/save",
+                  json={"archive_id": ARCHIVE_ID}, timeout=15)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["saved"] is True
+    assert data["archive_id"] == ARCHIVE_ID
+
+
+def test_archive_lists_saved_verdict(http, senate_verdict):
+    r = http.get(f"{API}/verdicts", params={"archive_id": ARCHIVE_ID}, timeout=15)
+    assert r.status_code == 200
+    items = r.json()
+    ids = [v["id"] for v in items]
+    assert senate_verdict["id"] in ids
+    for v in items:
+        assert v["saved"] is True
+        assert "_id" not in v
+
+
+def test_delete_wrong_archive_404(http, senate_verdict):
+    vid = senate_verdict["id"]
+    r = http.delete(f"{API}/verdicts/{vid}",
+                    params={"archive_id": WRONG_ARCHIVE_ID}, timeout=10)
+    assert r.status_code == 404
+
+
+def test_delete_unsaves(http, senate_verdict):
+    vid = senate_verdict["id"]
+    r = http.delete(f"{API}/verdicts/{vid}",
+                    params={"archive_id": ARCHIVE_ID}, timeout=10)
+    assert r.status_code == 200
+    # Should no longer be in archive list
+    r2 = http.get(f"{API}/verdicts", params={"archive_id": ARCHIVE_ID}, timeout=10)
+    assert r2.status_code == 200
+    ids = [v["id"] for v in r2.json()]
+    assert vid not in ids
+
+
+# ---- Forge multi-call deliberation (real LLM, slow) ------------------ #
+def test_forge_deliberation(http):
+    payload = {
+        "chamber_id": "forge",
+        "question": ("My business is succeeding but my marriage is suffering, "
+                     "and I keep telling myself God called me to build this. "
+                     "Am I lying to myself?"),
+        "archive_id": ARCHIVE_ID,
+    }
+    t0 = time.time()
+    r = http.post(f"{API}/deliberate", json=payload, timeout=240)
+    print(f"\nForge deliberation: {time.time()-t0:.1f}s, status={r.status_code}")
+    if r.status_code != 200:
+        pytest.fail(f"Forge deliberate failed: {r.status_code} {r.text[:500]}")
+    v = r.json()
+    assert v["chamber"] == "The Forge"
+    assert v["chamber_id"] == "forge"
+    assert isinstance(v["verdict"], str) and len(v["verdict"]) > 20
+    wc = v.get("witnesses_called") or []
+    assert isinstance(wc, list) and len(wc) >= 1
+    assert set(wc).issubset({"senate", "boardroom", "courtroom", "council"})
+    delib = v["deliberation"]
+    assert len(delib) == len(wc), "deliberation should have one entry per witness"
+    assert "_id" not in v
