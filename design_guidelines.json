@@ -1,0 +1,132 @@
+{
+  "theme": "dark",
+  "archetype": "5 (Jewel & Luxury)",
+  "concept": "Judicial-Anatomical",
+  "brand_identity": {
+    "tagline": "Real wisdom is never one voice. It's a whole mind at work.",
+    "emotional_tone": "Weighty, deliberate, old-world refined, intellectual, authoritative.",
+    "aesthetic": "Victorian neuroanatomy atlas illuminated by warm sodium light. Marble Senate floors, oak-paneled boardrooms, cathedral stone. Heavy, historic, precise. NOT cyberpunk, NOT AI-slop."
+  },
+  "colors": {
+    "base": {
+      "obsidian": "#0A0A0F",
+      "carbon": "#14141C",
+      "slate": "#2A2A36",
+      "bone": "#E8E4DC",
+      "pearl": "#F5F2EC",
+      "ash": "#6B6B78"
+    },
+    "chambers": {
+      "senate": {
+        "primary": "#8B1A1A",
+        "accent": "#C9A961",
+        "description": "Frontal Lobe - Crimson and Gold"
+      },
+      "boardroom": {
+        "primary": "#0F4F3F",
+        "accent": "#B8864F",
+        "description": "Parietal Lobe - Emerald and Bronze"
+      },
+      "courtroom": {
+        "primary": "#3A2419",
+        "accent": "#A88A4A",
+        "description": "Temporal Lobe - Walnut and Brass"
+      },
+      "council": {
+        "primary": "#1B2A5C",
+        "accent": "#F5F2EC",
+        "description": "Occipital Lobe - Cobalt and Pearl"
+      },
+      "forge": {
+        "primary": "#C84A1F",
+        "accent": "#FFE5B4",
+        "description": "Corpus Callosum - Ember and White-hot"
+      }
+    },
+    "background": "#0A0A0F",
+    "text_primary": "#E8E4DC",
+    "text_secondary": "#6B6B78",
+    "border": "#2A2A36"
+  },
+  "typography": {
+    "display": {
+      "family": "'Cormorant Garamond', serif",
+      "weights": [700],
+      "styles": ["normal", "italic"],
+      "usage": "Judicial weight, H1/H2, chamber titles, dropped capitals."
+    },
+    "body": {
+      "family": "'Source Serif 4', serif",
+      "weights": [400, 600],
+      "usage": "Editorial text, verdicts, long-form deliberation text."
+    },
+    "ui": {
+      "family": "'DM Sans', sans-serif",
+      "weights": [400, 500, 700],
+      "usage": "Navigation, metadata, buttons, labels. Must use tabular figures for numerals."
+    }
+  },
+  "spacing_and_layout": {
+    "philosophy": "Generous Spacing (p-8 to p-24) to emulate the physical space of a courtroom or cathedral. Strict alignment.",
+    "grids": "Symmetric, column-based reading for verdicts (editorial). Asymmetric 'Bento' for archive and council members.",
+    "header": "Minimal glassmorphism. bg-obsidian/60 backdrop-blur-2xl border-b border-slate.",
+    "cards": "Subtle 1px border (border-slate), flat backgrounds (bg-carbon). Hover states trigger subtle glow in the chamber's primary color."
+  },
+  "motion": {
+    "cortex_breathing": "4s cycle ease-in-out continuous animation (opacity and scale pulsing slightly).",
+    "chamber_descent": "600ms ease-out on click (transform: translateY).",
+    "stagger_reveal": "200ms stagger for council member deliberation reveals.",
+    "forge_pulse": "Faster, warmer pulse for the Forge (2s cycle, box-shadow ember glow)."
+  },
+  "components": {
+    "cortex_svg": "Interactive SVG brain map. 4 distinct lobes + central corpus callosum. Hovering over a lobe glows its respective chamber color.",
+    "question_textarea": "Framed as a stone tablet or parchment. border-slate with inner shadow. Focus state: border glows in chamber accent.",
+    "council_member_card": "Minimalist card. Uses SVG glyphs (Laurel, Scales, Sword, Eye) instead of portraits. bg-carbon border-slate.",
+    "verdict_layout": "Editorial style. Large dropped capital in Cormorant Garamond, colored in chamber primary. Source Serif 4 body. Generous leading.",
+    "forge_quadrant": "Cross-chamber indicator showing which voices are feeding into the Forge's synthesis."
+  },
+  "media": {
+    "images": [
+      {
+        "url": "https://images.unsplash.com/photo-1747696766706-5485b39bf358?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwxfHxkYXJrJTIwbWFyYmxlJTIwdGV4dHVyZXxlbnwwfHx8fDE3NzcyNTMzOTd8MA&ixlib=rb-4.1.0&q=85",
+        "category": "texture_marble",
+        "description": "Dark marble for Senate background and stone tablet textures. Apply with low opacity (10-20%) and mix-blend-mode."
+      },
+      {
+        "url": "https://images.pexels.com/photos/33827030/pexels-photo-33827030.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "texture_cathedral",
+        "description": "Gothic arches and vaulted ceiling inside the Cologne Cathedral for atmospheric background overlays."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1773401348019-629c2a92a871?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDN8MHwxfHNlYXJjaHwxfHxnbG93aW5nJTIwZm9yZ2UlMjBlbWJlcnN8ZW58MHx8fHwxNzc3MjUzMzk3fDA&ixlib=rb-4.1.0&q=85",
+        "category": "texture_forge",
+        "description": "Glowing hot coals and embers for the Forge chamber background effect."
+      },
+      {
+        "url": "https://images.pexels.com/photos/5102226/pexels-photo-5102226.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "texture_parchment",
+        "description": "Vintage tattered paper texture for the verdict layout and question input background."
+      }
+    ],
+    "svg_glyphs_directions": "Use sharp, classical vectors. For example: an interlocking laurel wreath for the Statesman, balanced scales for the Strategist, an owl for the Scholar. Render in --bone or chamber accent colors."
+  },
+  "pages": {
+    "landing": "Anatomical SVG cortex at the center. Dark void background. Each lobe acts as a clickable region. Title: CEREBRAL CORTEX in Cormorant Garamond.",
+    "senate": "Subtle dark marble background overlay. Red/Gold accents. Council of 4 figures. Input area for questions.",
+    "forge": "Corpus callosum chamber. Warmer lighting (Ember/White-hot). Quadrant layout displaying inputs from all 4 chambers synthesizing.",
+    "verdict": "Single column editorial layout. Dropped caps. Source Serif 4 text. Metadata in DM Sans.",
+    "archive": "Bento grid of past verdicts. Each card colored faintly with its originating chamber's color.",
+    "about": "Explains the biological metaphor of the 4 lobes and the Forge."
+  },
+  "instructions_to_main_agent": [
+    "Strictly use the provided hex codes for colors. Map them to CSS variables as instructed in the spec.",
+    "Use Lucide-react or similar SVG library for the council member glyphs.",
+    "Add 'data-testid' to all interactive elements.",
+    "Use Framer Motion for the 4s breathing cycle, 600ms descent, and 200ms stagger.",
+    "Ensure textual contrast. Use text-shadow if placing text over the marble or ember backgrounds.",
+    "Implement the app layout without excessive chrome. The header should be minimal glassmorphism.",
+    "Do NOT use standard card styles for the verdicts. Treat them like editorial pages.",
+    "Configure Tailwind with the exact font families requested and load them via Google Fonts.",
+    "Subset first: only build the fully fleshed out views for Landing, Senate, Forge, Archive, Verdict, About."
+  ]
+}
