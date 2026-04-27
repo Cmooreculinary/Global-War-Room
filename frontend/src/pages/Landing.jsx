@@ -56,6 +56,13 @@ export default function Landing() {
                   </svg>
                 </Link>
                 <Link
+                  to="/receipts"
+                  className="smallcaps text-ash hover:text-bone transition-colors"
+                  data-testid="landing-cta-receipts"
+                >
+                  Read the receipts
+                </Link>
+                <Link
                   to="/about"
                   className="smallcaps text-ash hover:text-bone transition-colors"
                   data-testid="landing-cta-about"

@@ -40,6 +40,7 @@ export const Layout = ({ children, accentChamber = null }) => {
           <nav className="hidden items-center gap-7 md:flex">
             <NavLink to="/" label="Cortex" current={location.pathname === "/"} testid="nav-cortex" />
             <NavLink to="/forge" label="The Forge" current={location.pathname.startsWith("/forge")} testid="nav-forge" />
+            <NavLink to="/receipts" label="Receipts" current={location.pathname.startsWith("/receipts")} testid="nav-receipts" />
             <NavLink to="/archive" label="Archive" current={location.pathname.startsWith("/archive")} testid="nav-archive" />
             <NavLink to="/about" label="About" current={location.pathname.startsWith("/about")} testid="nav-about" />
           </nav>

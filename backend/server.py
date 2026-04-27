@@ -16,7 +16,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 from cortex_service import deliberate_chamber, deliberate_forge  # noqa: E402
-from personas import CHAMBERS  # noqa: E402
+from personas import CHAMBERS, RECONSTRUCTION_DISCLAIMER  # noqa: E402
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -36,12 +36,23 @@ logger = logging.getLogger(__name__)
 # Models                                                                      #
 # --------------------------------------------------------------------------- #
 
+class Source(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    type: str
+    title: str
+    author: Optional[str] = None
+    year: Optional[str] = None
+
+
 class CouncilMember(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     id: str
     name: str
+    dates: Optional[str] = None
     lineage: str
     glyph: str
     voice_notes: str
+    sources: Optional[List[Source]] = None
 
 
 class ChamberInfo(BaseModel):
@@ -55,6 +66,11 @@ class ChamberInfo(BaseModel):
     loading: str
     error: str
     council: List[CouncilMember]
+
+
+class PersonasResponse(BaseModel):
+    disclaimer: str
+    chambers: List[ChamberInfo]
 
 
 class DeliberateRequest(BaseModel):
@@ -107,6 +123,15 @@ async def get_chamber(chamber_id: str):
     if chamber_id not in CHAMBERS:
         raise HTTPException(status_code=404, detail="Chamber not found")
     return ChamberInfo(**CHAMBERS[chamber_id])
+
+
+@api_router.get("/personas", response_model=PersonasResponse)
+async def get_personas():
+    """All chambers with full council + sources — for the Receipts page."""
+    return PersonasResponse(
+        disclaimer=RECONSTRUCTION_DISCLAIMER,
+        chambers=[ChamberInfo(**CHAMBERS[cid]) for cid in CHAMBERS],
+    )
 
 
 @api_router.post("/deliberate", response_model=Verdict)

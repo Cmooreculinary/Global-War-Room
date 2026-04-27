@@ -30,6 +30,11 @@ export default function CouncilMemberCard({ member, chamberId, compact = false }
           >
             {member.name}
           </h4>
+          {member.dates && (
+            <span className="smallcaps tabular text-ash whitespace-nowrap">
+              {member.dates}
+            </span>
+          )}
         </div>
         <p
           className="smallcaps mt-0.5"

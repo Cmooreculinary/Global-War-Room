@@ -17,10 +17,19 @@ A judicial-anatomical AI judgment system modeled on the human brain. Five chambe
 - **AI:** Anthropic `claude-sonnet-4-5-20250929` via emergentintegrations + EMERGENT_LLM_KEY. Single-call multi-persona for chambers; multi-call witness-and-synthesize for The Forge.
 
 ## Decisions (v1)
-- Council = **hybrid archetypes** (titles inspired by real lineages, not impersonations).
+- Council = **named real figures, reconstructed from the public record** (v2 pivot from archetypes — Feb 2026).
 - Council member representation = **symbolic SVG glyphs**, not photoreal portraits.
 - Persistence = **MongoDB** (per-browser archive_id from localStorage).
 - LLM provider = **Emergent Universal LLM Key** (Claude Sonnet 4.5).
+
+## The Councils (v2 — Feb 2026)
+- **Senate**: Abraham Lincoln, Winston Churchill, Marcus Aurelius, Edmund Burke
+- **Boardroom**: Warren Buffett, Charlie Munger, Steve Jobs, Peter Drucker
+- **Court Room**: Wendell Berry, Brené Brown, Viktor Frankl
+- **Council**: Thomas Aquinas, C.S. Lewis, Dietrich Bonhoeffer, Mother Teresa
+- **Forge**: The Integrator (in the lineage of Aristotle)
+
+Each persona carries a `sources` ledger (books, speeches, letters, biographies) surfaced on `/receipts`. System prompt is explicit: "These voices are reconstructions, not channelings." The Receipts page shows the disclaimer + every voice + every source we reasoned from.
 
 ## Implemented (Feb 2026)
 - ✅ Anatomical SVG cortex landing — 4 lobes + Forge at center, breathing animation, hover descend, click-through routing

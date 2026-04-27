@@ -9,6 +9,7 @@ import ForgePage from "@/pages/ForgePage";
 import VerdictPage from "@/pages/VerdictPage";
 import ArchivePage from "@/pages/ArchivePage";
 import AboutPage from "@/pages/AboutPage";
+import ReceiptsPage from "@/pages/ReceiptsPage";
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
           <Route path="/verdict/:id" element={<VerdictPage />} />
           <Route path="/archive" element={<ArchivePage />} />
           <Route path="/about" element={<AboutPage />} />
+          <Route path="/receipts" element={<ReceiptsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

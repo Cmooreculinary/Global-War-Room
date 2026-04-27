@@ -17,7 +17,12 @@ const SECTIONS = [
   {
     title: "Why archetypes, not chatbots.",
     body:
-      "Each chamber holds a council of archetype voices — the Statesman, the Strategist, the Theologian — drawn from lineages of master figures. They speak in turn. They may disagree. The chamber renders judgment over them. You receive a verdict, not a chat reply.",
+      "Each chamber holds a council of named figures — Lincoln and Aurelius in the Senate, Buffett and Munger in the Boardroom, Wendell Berry and Brené Brown in the Court Room, Aquinas and C.S. Lewis in the Council. They speak in turn. They may disagree. The chamber renders judgment over them. You receive a verdict, not a chat reply.",
+  },
+  {
+    title: "Reconstructions, with receipts.",
+    body:
+      "These voices are reconstructions, not channelings. We reason from each figure's public record — their books, letters, speeches, biographies — to what they would most likely say to your question. Every voice is listed on the Receipts page with the works we drew from. We may be wrong. They are not bound by us. Adjust accordingly.",
   },
   {
     title: "What this is not.",
@@ -81,6 +86,13 @@ export default function AboutPage() {
             data-testid="about-cta-cortex"
           >
             Step inside the cortex
+          </Link>
+          <Link
+            to="/receipts"
+            className="smallcaps text-ash hover:text-bone transition-colors"
+            data-testid="about-cta-receipts"
+          >
+            Read the receipts →
           </Link>
           <Link
             to="/forge"

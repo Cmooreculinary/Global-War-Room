@@ -11,6 +11,11 @@ export async function fetchChamber(chamberId) {
   return data;
 }
 
+export async function fetchPersonas() {
+  const { data } = await http.get(`/personas`);
+  return data;
+}
+
 export async function deliberate(chamberId, question) {
   const { data } = await http.post(`/deliberate`, {
     chamber_id: chamberId,

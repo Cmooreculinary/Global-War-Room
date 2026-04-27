@@ -136,6 +136,28 @@ export const AnvilGlyph = (p) => (
   </Wrap>
 );
 
+export const PillarGlyph = (p) => (
+  <Wrap {...p}>
+    <path d="M9 5 h 14 v 3 h -14 z" />
+    <path d="M11 8 v 16" />
+    <path d="M15 8 v 16" />
+    <path d="M19 8 v 16" />
+    <path d="M7 24 h 18 v 3 h -18 z" />
+  </Wrap>
+);
+
+export const OwlGlyph = (p) => (
+  <Wrap {...p}>
+    <path d="M16 5 q -8 0 -8 9 q 0 9 8 12 q 8 -3 8 -12 q 0 -9 -8 -9 z" />
+    <circle cx="13" cy="13" r="2.6" />
+    <circle cx="19" cy="13" r="2.6" />
+    <circle cx="13" cy="13" r="0.9" fill="currentColor" />
+    <circle cx="19" cy="13" r="0.9" fill="currentColor" />
+    <path d="M14.5 17 q 1.5 1.5 3 0" />
+    <path d="M16 5 l -2 -2 M16 5 l 2 -2" />
+  </Wrap>
+);
+
 export const GLYPHS = {
   laurel: LaurelGlyph,
   scales: ScalesGlyph,
@@ -152,6 +174,8 @@ export const GLYPHS = {
   flame: FlameGlyph,
   halo: HaloGlyph,
   anvil: AnvilGlyph,
+  pillar: PillarGlyph,
+  owl: OwlGlyph,
 };
 
 export function Glyph({ name, size = 28, className = "" }) {

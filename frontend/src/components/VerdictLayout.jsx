@@ -64,11 +64,18 @@ export default function VerdictLayout({ verdict, council = [], showActions = fal
                     >
                       {d.member}
                     </h5>
-                    {d.dissent && (
-                      <span className="smallcaps text-[#E89A9A]" data-testid="dissent-marker">
-                        Dissent
-                      </span>
-                    )}
+                    <div className="flex items-baseline gap-3">
+                      {member?.dates && (
+                        <span className="smallcaps tabular text-ash whitespace-nowrap">
+                          {member.dates}
+                        </span>
+                      )}
+                      {d.dissent && (
+                        <span className="smallcaps text-[#E89A9A]" data-testid="dissent-marker">
+                          Dissent
+                        </span>
+                      )}
+                    </div>
                   </div>
                   {member?.lineage && (
                     <p className="smallcaps mt-0.5" style={{ color: t.accent, opacity: 0.85 }}>
