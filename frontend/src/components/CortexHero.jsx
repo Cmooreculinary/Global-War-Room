@@ -191,11 +191,23 @@ export default function CortexHero({ className = "" }) {
               className="smallcaps mt-0.5"
               style={{
                 color: "#E8E4DC",
-                opacity: isHover ? 0.95 : 0.6,
+                opacity: isHover ? 0.95 : 0.55,
                 textShadow: "0 1px 6px rgba(10,10,15,0.95)",
               }}
             >
               {r.biology}
+            </span>
+            <span
+              className="cortex-editorial italic mt-1"
+              style={{
+                fontSize: "0.78rem",
+                color: t.accent,
+                opacity: isHover ? 0.95 : 0.65,
+                textShadow: "0 1px 6px rgba(10,10,15,0.95)",
+                letterSpacing: "0.01em",
+              }}
+            >
+              {t.description}
             </span>
           </div>
         );
@@ -266,6 +278,17 @@ export default function CortexHero({ className = "" }) {
         >
           Corpus Callosum
         </span>
+        <span
+          className="cortex-editorial italic mt-1"
+          style={{
+            fontSize: "0.78rem",
+            color: "#FFE5B4",
+            opacity: 0.8,
+            textShadow: "0 1px 6px rgba(10,10,15,0.95)",
+          }}
+        >
+          {CHAMBER_THEME.forge.description}
+        </span>
       </div>
 
       {/* Hover caption beneath */}
@@ -274,10 +297,8 @@ export default function CortexHero({ className = "" }) {
         style={{ opacity: hovered ? 1 : 0.45 }}
         data-testid="cortex-hover-caption"
       >
-        {hovered === "forge"
-          ? "The Forge — the integrator, between hemispheres"
-          : hovered
-          ? `${CHAMBER_THEME[hovered].name} — ${CHAMBER_THEME[hovered].biology}`
+        {hovered
+          ? `${CHAMBER_THEME[hovered].name} — ${CHAMBER_THEME[hovered].description}`
           : "Hover a region. Click to descend."}
       </div>
     </div>
