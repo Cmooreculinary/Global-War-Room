@@ -26,8 +26,11 @@ export default function VerdictPage() {
         try {
           const c = await fetchChamber(v.chamber_id);
           if (alive) setChamber(c);
-        } catch {
-          // chamber lookup is decorative for the verdict page
+        } catch (err) {
+          // Chamber lookup is decorative — verdict still renders without it.
+          // Log for diagnostics; do not surface to the user.
+          // eslint-disable-next-line no-console
+          console.warn("Chamber lookup failed for verdict", v.chamber_id, err);
         }
       })
       .catch(() => alive && setError("This verdict could not be retrieved."))
@@ -35,6 +38,9 @@ export default function VerdictPage() {
     return () => {
       alive = false;
     };
+    // `id` is the only external trigger for this effect; the `alive` cleanup
+    // pattern + module-imported fetchers are intentional React idioms.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const onSave = async () => {

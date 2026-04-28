@@ -22,6 +22,8 @@ export default function ReceiptsPage() {
     return () => {
       alive = false;
     };
+    // Mount-only effect: imported fetcher is module-stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -192,11 +194,11 @@ function PersonaReceipt({ member, chamberId }) {
         <p className="smallcaps text-ash mb-4">Sources we reasoned from</p>
         {member.sources && member.sources.length > 0 ? (
           <ul className="divide-y divide-slate/60">
-            {member.sources.map((s, i) => (
+            {member.sources.map((s) => (
               <li
-                key={i}
+                key={`${member.id}-${s.title}`}
                 className="grid grid-cols-12 items-baseline gap-3 py-3"
-                data-testid={`source-${member.id}-${i}`}
+                data-testid={`source-${member.id}-${s.title.replace(/\s+/g, '-').slice(0, 32)}`}
               >
                 <span
                   className="smallcaps col-span-12 sm:col-span-3"

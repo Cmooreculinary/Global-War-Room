@@ -47,6 +47,8 @@ export default function ForgePage() {
 
   useEffect(() => {
     fetchChamber("forge").then(setChamber).catch(() => {});
+    // Mount-only effect: imported fetcher and setter are stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onForge = async () => {

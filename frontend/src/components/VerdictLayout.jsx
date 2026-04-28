@@ -29,9 +29,12 @@ export default function VerdictLayout({ verdict, council = [], showActions = fal
         <p className="smallcaps text-ash">Deliberation</p>
         {verdict.deliberation.map((d, i) => {
           const member = memberByName[d.member];
+          // Stable key combines speaker name + position. The LLM does not provide
+          // unique IDs per contribution, but (member, index) is invariant for a given verdict.
+          const key = `${d.member}-${i}`;
           return (
             <motion.div
-              key={i}
+              key={key}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.2, duration: 0.55, ease: [0.25, 0.46, 0.45, 0.94] }}

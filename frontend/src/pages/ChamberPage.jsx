@@ -35,6 +35,9 @@ export default function ChamberPage() {
     return () => {
       alive = false;
     };
+    // `id` is the only external trigger; alive cleanup + module-stable
+    // fetcher mean other "missing" deps don't need to retrigger this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   if (!t) {

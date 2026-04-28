@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -10,17 +10,17 @@ export default function ArchivePage() {
   const [verdicts, setVerdicts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     fetchArchive()
       .then(setVerdicts)
       .catch(() => setVerdicts([]))
       .finally(() => setLoading(false));
-  };
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const onRemove = async (id) => {
     try {

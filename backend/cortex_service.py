@@ -70,6 +70,48 @@ async def _ask_json(system_message: str, user_text: str) -> dict:
         raise ValueError(f"LLM returned non-JSON: {e}") from e
 
 
+VALID_LOBE_CHAMBERS = {"senate", "boardroom", "courtroom", "council"}
+
+
+def _sanitize_committee(home_chamber: str, raw_chambers) -> list:
+    """Normalise a classifier response into a clean ordered list:
+    home chamber first, only valid lobe ids, max 3 total, no duplicates.
+    """
+    cleaned = [c for c in (raw_chambers or []) if c in VALID_LOBE_CHAMBERS]
+    if home_chamber not in cleaned:
+        cleaned = [home_chamber, *cleaned]
+    cleaned = [home_chamber, *[c for c in cleaned if c != home_chamber]]
+    return cleaned[:3]
+
+
+async def _classify_committee(home_chamber: str, question: str) -> list:
+    """Ask the LLM whether this question requires a cross-chamber committee."""
+    try:
+        classification = await _ask_json(
+            committee_classifier_prompt(home_chamber), question
+        )
+        return _sanitize_committee(home_chamber, classification.get("chambers"))
+    except Exception as e:
+        logger.warning("Committee classifier failed: %s — falling back to home only", e)
+        return [home_chamber]
+
+
+async def _gather_witnesses(chamber_ids: list, question: str) -> list:
+    """Run a witness call per chamber, collecting whatever succeeds."""
+    witnesses = []
+    for cid in chamber_ids:
+        try:
+            w = await _ask_json(forge_witness_prompt(cid), question)
+            witnesses.append({
+                "chamber": w.get("chamber", CHAMBERS[cid]["name"]),
+                "chamber_id": cid,
+                "contribution": w.get("contribution", ""),
+            })
+        except Exception as e:
+            logger.warning("Witness call failed for %s: %s", cid, e)
+    return witnesses
+
+
 async def deliberate_chamber(chamber_id: str, question: str) -> dict:
     """Run a single-call multi-persona deliberation for one chamber."""
     if chamber_id not in CHAMBERS or chamber_id == "forge":
@@ -85,59 +127,31 @@ async def deliberate_chamber(chamber_id: str, question: str) -> dict:
 
 
 async def deliberate_with_committee(chamber_id: str, question: str) -> dict:
-    """Cross-chamber committee flow:
-    1. Classify whether this question crosses chamber domains.
-    2. If only home chamber needed → run single-chamber multi-persona deliberation.
-    3. If committee needed → gather witness contributions from each chamber, then
-       have the home chamber chair the synthesis.
+    """Cross-chamber committee orchestrator.
+
+    1. Classify whether the question crosses chamber domains.
+    2. If only the home chamber is needed → single-chamber multi-persona deliberation.
+    3. Else → gather witness contributions per chamber, then have the home chamber
+       chair the synthesis.
     """
     if chamber_id not in CHAMBERS or chamber_id == "forge":
         raise ValueError(f"Unknown chamber for committee: {chamber_id}")
 
-    valid = {"senate", "boardroom", "courtroom", "council"}
-
-    # Step 1 — committee relevance
-    try:
-        classification = await _ask_json(
-            committee_classifier_prompt(chamber_id), question
-        )
-        chambers_to_call = classification.get("chambers", [chamber_id])
-    except Exception as e:
-        logger.warning("Committee classifier failed: %s — falling back to home only", e)
-        chambers_to_call = [chamber_id]
-
-    # Sanitize: home must be first, only valid ids, max 3 total
-    chambers_to_call = [c for c in chambers_to_call if c in valid]
-    if chamber_id not in chambers_to_call:
-        chambers_to_call = [chamber_id] + chambers_to_call
-    chambers_to_call = [chamber_id] + [c for c in chambers_to_call if c != chamber_id]
-    chambers_to_call = chambers_to_call[:3]
-
-    # Step 2 — if only home chamber is needed, single-call multi-persona path
+    chambers_to_call = await _classify_committee(chamber_id, question)
     if len(chambers_to_call) == 1:
         return await deliberate_chamber(chamber_id, question)
 
-    # Step 3 — gather witness contributions per chamber
-    witnesses = []
-    for cid in chambers_to_call:
-        try:
-            w = await _ask_json(forge_witness_prompt(cid), question)
-            witnesses.append({
-                "chamber": w.get("chamber", CHAMBERS[cid]["name"]),
-                "chamber_id": cid,
-                "contribution": w.get("contribution", ""),
-            })
-        except Exception as e:
-            logger.warning("Committee witness call failed for %s: %s", cid, e)
-
+    witnesses = await _gather_witnesses(chambers_to_call, question)
     if not witnesses:
-        # All witness calls failed — fall back to single-chamber flow so the user gets *something*
-        logger.warning("All committee witnesses failed for %s; falling back to single chamber", chamber_id)
+        logger.warning(
+            "All committee witnesses failed for %s; falling back to single chamber",
+            chamber_id,
+        )
         return await deliberate_chamber(chamber_id, question)
 
-    # Step 4 — home chamber chairs the synthesis
-    synthesis_system = committee_chair_synthesis_prompt(chamber_id, witnesses)
-    synthesis = await _ask_json(synthesis_system, question)
+    synthesis = await _ask_json(
+        committee_chair_synthesis_prompt(chamber_id, witnesses), question
+    )
     synthesis["chamber_id"] = chamber_id
     synthesis.setdefault("chamber", CHAMBERS[chamber_id]["name"])
     synthesis["question"] = question

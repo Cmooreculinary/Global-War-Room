@@ -45,8 +45,8 @@ export default function AboutPage() {
 
         <div className="hairline mt-10" />
 
-        {SECTIONS.map((s, i) => (
-          <section key={i} className="mt-12" data-testid={`about-section-${i}`}>
+        {SECTIONS.map((s) => (
+          <section key={s.title} className="mt-12" data-testid={`about-section-${s.title.replace(/\s+/g, '-').toLowerCase()}`}>
             <h3 className="cortex-display text-3xl text-pearl" style={{ fontWeight: 600 }}>
               {s.title}
             </h3>
