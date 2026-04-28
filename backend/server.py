@@ -15,7 +15,7 @@ from starlette.middleware.cors import CORSMiddleware
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-from cortex_service import deliberate_chamber, deliberate_forge  # noqa: E402
+from cortex_service import deliberate_forge, deliberate_with_committee  # noqa: E402
 from personas import CHAMBERS, RECONSTRUCTION_DISCLAIMER  # noqa: E402
 
 mongo_url = os.environ["MONGO_URL"]
@@ -94,6 +94,7 @@ class Verdict(BaseModel):
     question: str
     deliberation: List[DeliberationContribution]
     verdict: str
+    committee: bool = False
     witnesses_called: Optional[List[str]] = None
     archive_id: Optional[str] = None
     saved: bool = False
@@ -145,7 +146,7 @@ async def deliberate(req: DeliberateRequest):
         if req.chamber_id == "forge":
             payload = await deliberate_forge(req.question)
         else:
-            payload = await deliberate_chamber(req.chamber_id, req.question)
+            payload = await deliberate_with_committee(req.chamber_id, req.question)
     except Exception as e:
         logger.exception("Deliberation failed")
         raise HTTPException(
@@ -161,6 +162,7 @@ async def deliberate(req: DeliberateRequest):
             DeliberationContribution(**d) for d in payload.get("deliberation", [])
         ],
         verdict=payload.get("verdict", ""),
+        committee=bool(payload.get("committee", False)),
         witnesses_called=payload.get("witnesses_called"),
         archive_id=req.archive_id,
         saved=False,

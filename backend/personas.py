@@ -511,3 +511,63 @@ Respond as STRICT JSON ONLY (no prose, no markdown):
 
 Include every witness in the deliberation array, in the order they appeared above.
 """
+
+
+def committee_classifier_prompt(home_chamber_id: str) -> str:
+    """Decide whether a chamber should form a cross-chamber committee for this question."""
+    home = CHAMBERS[home_chamber_id]
+    other_chambers = "\n".join(
+        f"- {cid}: {CHAMBERS[cid]['name']} — {CHAMBERS[cid]['domain']}"
+        for cid in ["senate", "boardroom", "courtroom", "council"]
+        if cid != home_chamber_id
+    )
+    return f"""You are the chair of {home['name']} of Cerebral Cortex. A user has brought a question. Your chamber's domain is: {home['domain']}.
+
+Sometimes a question crosses domains and requires a committee — your chamber plus voices from related chambers. Decide.
+
+Other chambers available to call:
+{other_chambers}
+
+Rules:
+- If the question is squarely within {home['name']}'s domain alone, return ONLY ["{home_chamber_id}"].
+- If the question materially crosses into 1–2 other domains, return ["{home_chamber_id}", "<other>", ...] (max 3 chambers total).
+- Be selective. Most questions stay in one chamber. Only call witnesses when their voice is genuinely needed.
+
+Respond as STRICT JSON ONLY (no prose, no markdown):
+{{
+  "chambers": ["{home_chamber_id}", ...],
+  "reasoning": "<one short sentence — why a committee, or why not>"
+}}
+
+Use only these chamber_ids: senate, boardroom, courtroom, council. The home chamber "{home_chamber_id}" MUST be first.
+"""
+
+
+def committee_chair_synthesis_prompt(home_chamber_id: str, witnesses: list) -> str:
+    """Synthesis prompt where the home chamber chairs the committee verdict."""
+    home = CHAMBERS[home_chamber_id]
+    witness_block = "\n\n".join(
+        f"From {w['chamber']}:\n{w['contribution']}" for w in witnesses
+    )
+    return f"""You are the chair of {home['name']} of Cerebral Cortex. A committee was formed to answer this question because it crossed chamber domains. The following chambers have spoken:
+
+{witness_block}
+
+Your task as chair: render a single integrated verdict in the voice of {home['name']}. Where the chambers agree, name the agreement. Where they disagree, name the disagreement honestly — and resolve it. Distinguish, then resolve. The verdict belongs to your chamber, but acknowledges the committee that informed it.
+
+Domain of {home['name']}: {home['domain']}.
+Biological anchor: {home['biology']}.
+
+Tone: judicial, weighty, old-world refined. Your chamber owns this verdict — the other chambers were heard, but you decide.
+
+Respond as STRICT JSON ONLY (no prose, no markdown):
+{{
+  "deliberation": [
+    {{ "member": "<chamber name e.g. 'The Boardroom'>", "contribution": "<the witness's words, lightly edited for flow>", "dissent": <true if this voice disagrees with the verdict, else false> }}
+  ],
+  "verdict": "<4–7 sentences. {home['name']}'s integrated judgment. Names disagreement if any. Concrete.>",
+  "chamber": "{home['name']}"
+}}
+
+Include every witness in the deliberation array, in the order they appeared above.
+"""

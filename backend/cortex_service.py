@@ -14,6 +14,8 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage
 from personas import (
     CHAMBERS,
     chamber_system_prompt,
+    committee_chair_synthesis_prompt,
+    committee_classifier_prompt,
     forge_classifier_prompt,
     forge_synthesis_prompt,
     forge_witness_prompt,
@@ -77,7 +79,71 @@ async def deliberate_chamber(chamber_id: str, question: str) -> dict:
     payload.setdefault("chamber", CHAMBERS[chamber_id]["name"])
     payload["chamber_id"] = chamber_id
     payload["question"] = question
+    payload["committee"] = False
+    payload["witnesses_called"] = None
     return payload
+
+
+async def deliberate_with_committee(chamber_id: str, question: str) -> dict:
+    """Cross-chamber committee flow:
+    1. Classify whether this question crosses chamber domains.
+    2. If only home chamber needed → run single-chamber multi-persona deliberation.
+    3. If committee needed → gather witness contributions from each chamber, then
+       have the home chamber chair the synthesis.
+    """
+    if chamber_id not in CHAMBERS or chamber_id == "forge":
+        raise ValueError(f"Unknown chamber for committee: {chamber_id}")
+
+    valid = {"senate", "boardroom", "courtroom", "council"}
+
+    # Step 1 — committee relevance
+    try:
+        classification = await _ask_json(
+            committee_classifier_prompt(chamber_id), question
+        )
+        chambers_to_call = classification.get("chambers", [chamber_id])
+    except Exception as e:
+        logger.warning("Committee classifier failed: %s — falling back to home only", e)
+        chambers_to_call = [chamber_id]
+
+    # Sanitize: home must be first, only valid ids, max 3 total
+    chambers_to_call = [c for c in chambers_to_call if c in valid]
+    if chamber_id not in chambers_to_call:
+        chambers_to_call = [chamber_id] + chambers_to_call
+    chambers_to_call = [chamber_id] + [c for c in chambers_to_call if c != chamber_id]
+    chambers_to_call = chambers_to_call[:3]
+
+    # Step 2 — if only home chamber is needed, single-call multi-persona path
+    if len(chambers_to_call) == 1:
+        return await deliberate_chamber(chamber_id, question)
+
+    # Step 3 — gather witness contributions per chamber
+    witnesses = []
+    for cid in chambers_to_call:
+        try:
+            w = await _ask_json(forge_witness_prompt(cid), question)
+            witnesses.append({
+                "chamber": w.get("chamber", CHAMBERS[cid]["name"]),
+                "chamber_id": cid,
+                "contribution": w.get("contribution", ""),
+            })
+        except Exception as e:
+            logger.warning("Committee witness call failed for %s: %s", cid, e)
+
+    if not witnesses:
+        # All witness calls failed — fall back to single-chamber flow so the user gets *something*
+        logger.warning("All committee witnesses failed for %s; falling back to single chamber", chamber_id)
+        return await deliberate_chamber(chamber_id, question)
+
+    # Step 4 — home chamber chairs the synthesis
+    synthesis_system = committee_chair_synthesis_prompt(chamber_id, witnesses)
+    synthesis = await _ask_json(synthesis_system, question)
+    synthesis["chamber_id"] = chamber_id
+    synthesis.setdefault("chamber", CHAMBERS[chamber_id]["name"])
+    synthesis["question"] = question
+    synthesis["committee"] = True
+    synthesis["witnesses_called"] = [w["chamber_id"] for w in witnesses]
+    return synthesis
 
 
 async def deliberate_forge(question: str) -> dict:
@@ -126,5 +192,6 @@ async def deliberate_forge(question: str) -> dict:
     synthesis["chamber_id"] = "forge"
     synthesis.setdefault("chamber", "The Forge")
     synthesis["question"] = question
+    synthesis["committee"] = True
     synthesis["witnesses_called"] = [w["chamber_id"] for w in witnesses]
     return synthesis

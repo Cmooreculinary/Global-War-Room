@@ -7,6 +7,7 @@ import Layout from "@/components/Layout";
 import QuestionInput from "@/components/QuestionInput";
 import VerdictLayout from "@/components/VerdictLayout";
 import ForgeQuadrant from "@/components/ForgeQuadrant";
+import DeliberationCortex from "@/components/DeliberationCortex";
 import { CHAMBER_THEME } from "@/lib/chambers";
 import { getImage } from "@/lib/images";
 import { fetchChamber, deliberate, saveVerdict } from "@/lib/api";
@@ -132,7 +133,19 @@ export default function ForgePage() {
         {!verdict && <ForgeHeader chamber={chamber} />}
 
         <AnimatePresence mode="wait">
-          {!verdict ? (
+          {loading ? (
+            <motion.div
+              key="loading"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.5 }}
+              className="mt-16"
+              data-testid="forge-loading"
+            >
+              <DeliberationCortex chamberId="forge" />
+            </motion.div>
+          ) : !verdict ? (
             <motion.div
               key="form"
               initial={{ opacity: 0, y: 10 }}

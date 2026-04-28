@@ -7,6 +7,8 @@ import Layout from "@/components/Layout";
 import QuestionInput from "@/components/QuestionInput";
 import CouncilMemberCard from "@/components/CouncilMemberCard";
 import VerdictLayout from "@/components/VerdictLayout";
+import DeliberationCortex from "@/components/DeliberationCortex";
+import ForgeQuadrant from "@/components/ForgeQuadrant";
 import { CHAMBER_THEME } from "@/lib/chambers";
 import { getImage } from "@/lib/images";
 import { fetchChamber, deliberate, saveVerdict } from "@/lib/api";
@@ -104,7 +106,19 @@ export default function ChamberPage() {
         )}
 
         <AnimatePresence mode="wait">
-          {!verdict ? (
+          {loading ? (
+            <motion.div
+              key="loading"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.5 }}
+              className="mt-16"
+              data-testid="chamber-loading"
+            >
+              <DeliberationCortex chamberId={id} />
+            </motion.div>
+          ) : !verdict ? (
             <motion.div
               key="form"
               initial={{ opacity: 0, y: 10 }}
@@ -189,7 +203,10 @@ export default function ChamberPage() {
               transition={{ duration: 0.6 }}
               className="mt-4"
             >
-              <VerdictLayout verdict={verdict} council={chamber?.council || []} showActions>
+              {verdict.committee && verdict.witnesses_called && verdict.witnesses_called.length > 1 && (
+                <CommitteeBanner verdict={verdict} />
+              )}
+              <VerdictLayout verdict={verdict} council={committeeCouncil(verdict, chamber)} showActions>
                 <button
                   onClick={onSave}
                   disabled={saving || verdict.saved}
@@ -241,6 +258,67 @@ function ChamberHeader({ chamber, chamberId }) {
       <p className="cortex-editorial mt-3 max-w-2xl text-base text-bone/75 md:text-lg">
         {chamber?.domain || t.domain}
       </p>
+    </div>
+  );
+}
+
+// When a committee was formed, the deliberation members are CHAMBERS, not council members.
+// Build a synthetic council so VerdictLayout can render glyphs for each chamber.
+function committeeCouncil(verdict, chamber) {
+  if (!verdict.committee || !verdict.witnesses_called) {
+    return chamber?.council || [];
+  }
+  const glyphFor = { senate: "laurel", boardroom: "ledger", courtroom: "hearth", council: "book" };
+  return verdict.witnesses_called.map((cid) => ({
+    name: CHAMBER_THEME[cid]?.name || cid,
+    glyph: glyphFor[cid] || "anvil",
+    lineage: `Witness from ${CHAMBER_THEME[cid]?.biology || ""}`,
+  }));
+}
+
+function CommitteeBanner({ verdict }) {
+  const t = CHAMBER_THEME[verdict.chamber_id];
+  return (
+    <div
+      className="mx-auto mb-10 max-w-4xl border bg-carbon/85 p-5 md:p-6"
+      style={{
+        borderColor: t.accent + "55",
+        borderRadius: 2,
+        borderLeftWidth: 3,
+        borderLeftColor: t.accent,
+      }}
+      data-testid="committee-banner"
+    >
+      <p className="smallcaps" style={{ color: t.accent }}>
+        Committee convened
+      </p>
+      <p className="cortex-display italic mt-1 text-xl md:text-2xl text-pearl">
+        The matter crossed chambers. {verdict.chamber} chaired the committee.
+      </p>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        {verdict.witnesses_called.map((cid) => {
+          const ct = CHAMBER_THEME[cid];
+          return (
+            <span
+              key={cid}
+              className="cortex-ui inline-flex items-center gap-2 border px-3 py-1.5 text-xs"
+              style={{
+                borderColor: ct.accent + "66",
+                color: "#F5F2EC",
+                background: `linear-gradient(135deg, ${ct.primary}1F, transparent)`,
+                borderRadius: 2,
+              }}
+              data-testid={`committee-witness-${cid}`}
+            >
+              <span
+                className="inline-block h-2 w-2 rounded-full"
+                style={{ background: ct.accent }}
+              />
+              {ct.name}
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 }
