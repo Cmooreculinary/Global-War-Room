@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import List, Optional
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, FastAPI, HTTPException, Query
+from fastapi import APIRouter, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.responses import Response
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.cors import CORSMiddleware
@@ -16,6 +17,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 from cortex_service import deliberate_forge, deliberate_with_committee, route_question  # noqa: E402
+from cortex_voice import synthesize_speech, transcribe_audio, voice_for_chamber  # noqa: E402
 from personas import CHAMBERS, RECONSTRUCTION_DISCLAIMER  # noqa: E402
 
 mongo_url = os.environ["MONGO_URL"]
@@ -115,6 +117,16 @@ class RouteResponse(BaseModel):
     reasoning: str = ""
 
 
+class TranscribeResponse(BaseModel):
+    text: str
+
+
+class SpeakRequest(BaseModel):
+    text: str
+    chamber_id: Optional[str] = None
+    voice: Optional[str] = None
+
+
 # --------------------------------------------------------------------------- #
 # Routes                                                                      #
 # --------------------------------------------------------------------------- #
@@ -152,6 +164,40 @@ async def route(req: RouteRequest):
         raise HTTPException(status_code=400, detail="Question is required")
     result = await route_question(req.question.strip())
     return RouteResponse(**result)
+
+
+@api_router.post("/transcribe", response_model=TranscribeResponse)
+async def transcribe(audio: UploadFile = File(...)):
+    """Transcribe an uploaded audio file (webm/mp3/wav/m4a) to plain text via Whisper."""
+    if not audio.filename:
+        raise HTTPException(status_code=400, detail="No audio file provided")
+    try:
+        text = await transcribe_audio(audio.file, audio.filename)
+    except Exception as e:
+        logger.exception("Transcription failed")
+        raise HTTPException(status_code=502, detail="Transcription failed") from e
+    return TranscribeResponse(text=text or "")
+
+
+@api_router.post("/speak")
+async def speak(req: SpeakRequest):
+    """Render text as MP3 audio in the chamber's voice."""
+    voice = req.voice or voice_for_chamber(req.chamber_id)
+    try:
+        audio_bytes = await synthesize_speech(req.text, voice=voice)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Speech synthesis failed")
+        raise HTTPException(status_code=502, detail="Speech synthesis failed") from e
+    return Response(
+        content=audio_bytes,
+        media_type="audio/mpeg",
+        headers={
+            "Cache-Control": "private, max-age=3600",
+            "X-Voice": voice,
+        },
+    )
 
 
 @api_router.post("/deliberate", response_model=Verdict)

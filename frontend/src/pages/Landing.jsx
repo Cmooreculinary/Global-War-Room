@@ -15,6 +15,8 @@ import { toast } from "sonner";
 import Layout from "@/components/Layout";
 import CortexHero from "@/components/CortexHero";
 import VerdictLayout from "@/components/VerdictLayout";
+import MicButton from "@/components/MicButton";
+import VerdictAudio from "@/components/VerdictAudio";
 import { CHAMBER_THEME } from "@/lib/chambers";
 import { CONVENING_MESSAGES, getChamberMessages } from "@/lib/loadingMessages";
 import { deliberate, fetchChamber, routeQuestion, saveVerdict } from "@/lib/api";
@@ -309,6 +311,9 @@ export default function Landing() {
                   Ask another
                 </button>
               </VerdictLayout>
+              <div className="mx-auto mt-8 max-w-4xl">
+                <VerdictAudio verdict={verdict} />
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -373,7 +378,10 @@ function ContextWindow({ question, onChange, onConvene, error }) {
         />
       </div>
 
-      <div className="mt-7 flex flex-wrap items-center justify-center gap-5">
+      <div className="mt-7 flex flex-wrap items-center justify-center gap-4">
+        <MicButton
+          onTranscribed={(text) => onChange((question || "").trim() ? `${question.trim()} ${text}` : text)}
+        />
         <button
           onClick={onConvene}
           disabled={!question.trim()}

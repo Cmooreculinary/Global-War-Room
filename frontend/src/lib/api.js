@@ -21,6 +21,29 @@ export async function routeQuestion(question) {
   return data;
 }
 
+export async function transcribeAudio(blob, filename = "recording.webm") {
+  const form = new FormData();
+  form.append("audio", blob, filename);
+  const { data } = await http.post(`/transcribe`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data; // { text }
+}
+
+export async function speakAudioUrl(text, chamberId) {
+  // Returns a blob URL for an MP3 the caller can assign to <audio src=…>.
+  const response = await fetch(`${API}/speak`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, chamber_id: chamberId }),
+  });
+  if (!response.ok) {
+    throw new Error(`Speech failed: ${response.status}`);
+  }
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
+}
+
 export async function deliberate(chamberId, question) {
   const { data } = await http.post(`/deliberate`, {
     chamber_id: chamberId,
