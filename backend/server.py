@@ -15,7 +15,7 @@ from starlette.middleware.cors import CORSMiddleware
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-from cortex_service import deliberate_forge, deliberate_with_committee  # noqa: E402
+from cortex_service import deliberate_forge, deliberate_with_committee, route_question  # noqa: E402
 from personas import CHAMBERS, RECONSTRUCTION_DISCLAIMER  # noqa: E402
 
 mongo_url = os.environ["MONGO_URL"]
@@ -105,6 +105,16 @@ class SaveRequest(BaseModel):
     archive_id: str
 
 
+class RouteRequest(BaseModel):
+    question: str
+
+
+class RouteResponse(BaseModel):
+    chamber_id: str
+    witnesses: List[str] = Field(default_factory=list)
+    reasoning: str = ""
+
+
 # --------------------------------------------------------------------------- #
 # Routes                                                                      #
 # --------------------------------------------------------------------------- #
@@ -133,6 +143,15 @@ async def get_personas():
         disclaimer=RECONSTRUCTION_DISCLAIMER,
         chambers=[ChamberInfo(**CHAMBERS[cid]) for cid in CHAMBERS],
     )
+
+
+@api_router.post("/route", response_model=RouteResponse)
+async def route(req: RouteRequest):
+    """Pre-deliberation routing: which chamber should chair this question?"""
+    if not req.question.strip():
+        raise HTTPException(status_code=400, detail="Question is required")
+    result = await route_question(req.question.strip())
+    return RouteResponse(**result)
 
 
 @api_router.post("/deliberate", response_model=Verdict)

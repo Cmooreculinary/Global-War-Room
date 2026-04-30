@@ -16,6 +16,11 @@ export async function fetchPersonas() {
   return data;
 }
 
+export async function routeQuestion(question) {
+  const { data } = await http.post(`/route`, { question });
+  return data;
+}
+
 export async function deliberate(chamberId, question) {
   const { data } = await http.post(`/deliberate`, {
     chamber_id: chamberId,

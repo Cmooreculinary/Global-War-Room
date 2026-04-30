@@ -13,6 +13,7 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 from personas import (
     CHAMBERS,
+    auto_router_prompt,
     chamber_system_prompt,
     committee_chair_synthesis_prompt,
     committee_classifier_prompt,
@@ -71,6 +72,35 @@ async def _ask_json(system_message: str, user_text: str) -> dict:
 
 
 VALID_LOBE_CHAMBERS = {"senate", "boardroom", "courtroom", "council"}
+ALL_CHAMBERS = VALID_LOBE_CHAMBERS | {"forge"}
+
+
+async def route_question(question: str) -> dict:
+    """Decide which chamber should chair a question. Used by the one-page UX
+    so the brain can light up before the slow deliberation begins.
+    Returns: {chamber_id, witnesses, reasoning}
+    """
+    try:
+        result = await _ask_json(auto_router_prompt(), question)
+    except Exception as e:
+        logger.warning("Auto-router failed: %s — defaulting to forge", e)
+        return {"chamber_id": "forge", "witnesses": [], "reasoning": "Router unavailable; default integration."}
+
+    home = result.get("home", "forge")
+    if home not in ALL_CHAMBERS:
+        home = "forge"
+
+    raw_witnesses = result.get("witnesses") or []
+    witnesses = [
+        cid for cid in raw_witnesses
+        if cid in VALID_LOBE_CHAMBERS and cid != home
+    ][:3]
+
+    return {
+        "chamber_id": home,
+        "witnesses": witnesses,
+        "reasoning": result.get("reasoning", ""),
+    }
 
 
 def _sanitize_committee(home_chamber: str, raw_chambers) -> list:

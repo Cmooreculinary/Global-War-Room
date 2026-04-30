@@ -571,3 +571,31 @@ Respond as STRICT JSON ONLY (no prose, no markdown):
 
 Include every witness in the deliberation array, in the order they appeared above.
 """
+
+
+def auto_router_prompt() -> str:
+    """Decide which chamber should chair a question — used by the one-page UX
+    so the brain can light up the relevant lobe(s) before deliberation begins.
+    """
+    chambers_block = "\n".join(
+        f"- {cid}: {CHAMBERS[cid]['name']} — {CHAMBERS[cid]['domain']}"
+        for cid in ["senate", "boardroom", "courtroom", "council"]
+    )
+    return f"""You are the gateway to Cerebral Cortex. A user has brought a hard question. Five chambers can answer:
+
+{chambers_block}
+- forge: The integrator. Use ONLY when the question is genuinely entangled across 3+ domains with no single natural home (e.g. faith + family + enterprise all at once).
+
+Decide which chamber should CHAIR the answer. Most questions have a clear primary domain — pick that. Use 'forge' sparingly.
+
+Also predict which OTHER chambers, if any, the chair will likely need to call as witnesses. (May be empty.)
+
+Respond as STRICT JSON ONLY (no prose, no markdown):
+{{
+  "home": "<one of: senate, boardroom, courtroom, council, forge>",
+  "witnesses": ["<chamber_id>", ...],
+  "reasoning": "<one short sentence>"
+}}
+
+Use only these chamber_ids: senate, boardroom, courtroom, council, forge. Do not include the home chamber in the witnesses list.
+"""

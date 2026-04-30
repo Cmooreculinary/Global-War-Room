@@ -1,6 +1,11 @@
 // CortexHero — uses the user-provided lateral brain image as the hero,
 // with absolutely-positioned interactive lobe hotspots over the cortex.
 //
+// Three modes:
+//   "idle"         — all lobes equally lit, hover/click enabled
+//   "deliberating" — only `activeChambers` blaze; others dim to ~25%; pulse intensifies
+//   "verdict"      — only `activeChambers` glow steadily (no pulse); others dim
+//
 // Image is left-lateral (side view): cerebellum at bottom-right, brainstem trailing down.
 //   Frontal lobe (Senate) ......... front-top, left of center
 //   Parietal lobe (Boardroom) ..... top-back / crown
@@ -16,58 +21,45 @@ import { motion } from "framer-motion";
 import { CHAMBER_THEME } from "@/lib/chambers";
 import { getImage } from "@/lib/images";
 
-// hot.x/hot.y = hotspot center. lab.x/lab.y = label center. Both as % of box.
 const REGIONS = [
-  {
-    id: "senate",
-    label: "Senate",
-    biology: "Frontal Lobe",
-    hot: { x: 30, y: 38, r: 11 },
-    lab: { x: 16, y: 22 },
-    align: "right",
-  },
-  {
-    id: "boardroom",
-    label: "Boardroom",
-    biology: "Parietal Lobe",
-    hot: { x: 56, y: 22, r: 11 },
-    lab: { x: 56, y: 7 },
-    align: "center",
-  },
-  {
-    id: "courtroom",
-    label: "Court Room",
-    biology: "Temporal Lobe",
-    hot: { x: 40, y: 64, r: 10 },
-    lab: { x: 22, y: 80 },
-    align: "right",
-  },
-  {
-    id: "council",
-    label: "Council",
-    biology: "Occipital Lobe",
-    hot: { x: 80, y: 50, r: 11 },
-    lab: { x: 94, y: 50 },
-    align: "left",
-  },
+  { id: "senate", label: "Senate", biology: "Frontal Lobe", hot: { x: 30, y: 38, r: 11 }, lab: { x: 16, y: 22 }, align: "right" },
+  { id: "boardroom", label: "Boardroom", biology: "Parietal Lobe", hot: { x: 56, y: 22, r: 11 }, lab: { x: 56, y: 7 }, align: "center" },
+  { id: "courtroom", label: "Court Room", biology: "Temporal Lobe", hot: { x: 40, y: 64, r: 10 }, lab: { x: 22, y: 80 }, align: "right" },
+  { id: "council", label: "Council", biology: "Occipital Lobe", hot: { x: 80, y: 50, r: 11 }, lab: { x: 92, y: 50 }, align: "left" },
 ];
 
 const FORGE = { x: 53, y: 44, r: 6, lab: { x: 53, y: 70 } };
 
-export default function CortexHero({ className = "" }) {
+export default function CortexHero({
+  className = "",
+  mode = "idle",
+  activeChambers = [],
+  onLobeClick,
+}) {
   const navigate = useNavigate();
   const [hovered, setHovered] = useState(null);
   const brain = getImage("brain_hero");
 
-  const onClick = (id) => {
+  const interactive = mode === "idle";
+
+  const handleClick = (id) => {
+    if (!interactive) return;
+    if (onLobeClick) {
+      onLobeClick(id);
+      return;
+    }
     if (id === "forge") navigate("/forge");
     else navigate(`/chamber/${id}`);
   };
+
+  const isActive = (id) => activeChambers.includes(id);
+  const dim = (id) => mode !== "idle" && !isActive(id);
 
   return (
     <div
       className={`relative mx-auto w-full max-w-[640px] aspect-square ${className}`}
       data-testid="cortex-hero"
+      data-mode={mode}
     >
       {/* Outer aureole */}
       <div
@@ -108,47 +100,71 @@ export default function CortexHero({ className = "" }) {
       {/* Hotspots (interactive circles) */}
       {REGIONS.map((r) => {
         const t = CHAMBER_THEME[r.id];
-        const isHover = hovered === r.id;
+        const blazing = mode !== "idle" && isActive(r.id);
+        const isHover = hovered === r.id && interactive;
+        const showGlow = isHover || blazing;
         return (
           <button
             key={r.id}
             type="button"
-            onClick={() => onClick(r.id)}
-            onMouseEnter={() => setHovered(r.id)}
-            onMouseLeave={() => setHovered(null)}
-            onFocus={() => setHovered(r.id)}
-            onBlur={() => setHovered(null)}
+            onClick={() => handleClick(r.id)}
+            onMouseEnter={() => interactive && setHovered(r.id)}
+            onMouseLeave={() => interactive && setHovered(null)}
+            onFocus={() => interactive && setHovered(r.id)}
+            onBlur={() => interactive && setHovered(null)}
             data-testid={`lobe-${r.id}`}
-            className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer focus:outline-none"
+            className={`absolute -translate-x-1/2 -translate-y-1/2 focus:outline-none ${
+              interactive ? "cursor-pointer" : "cursor-default pointer-events-none"
+            }`}
             style={{
               left: `${r.hot.x}%`,
               top: `${r.hot.y}%`,
               width: `${r.hot.r * 2}%`,
               height: `${r.hot.r * 2}%`,
               borderRadius: "50%",
-              background: isHover
+              background: showGlow
                 ? `radial-gradient(circle, ${t.primary}66 0%, ${t.primary}22 40%, transparent 72%)`
                 : `radial-gradient(circle, ${t.primary}1A 0%, transparent 70%)`,
-              boxShadow: isHover ? `0 0 50px 10px ${t.glowRgba}` : "none",
+              boxShadow: showGlow ? `0 0 50px 10px ${t.glowRgba}` : "none",
               transition: "background 0.4s ease, box-shadow 0.4s ease",
             }}
           >
-            <span
+            {/* Pulsing ring when this lobe is part of the active deliberation */}
+            <motion.span
               aria-hidden
-              className="absolute inset-[16%] rounded-full border transition-all duration-500"
+              className="absolute inset-[12%] rounded-full border"
               style={{
-                borderColor: isHover ? t.accent + "BB" : "transparent",
-                boxShadow: isHover ? `inset 0 0 22px ${t.glowRgba}` : "none",
+                borderColor: blazing ? t.accent : isHover ? t.accent + "BB" : "transparent",
+                boxShadow: showGlow ? `inset 0 0 28px ${t.glowRgba}` : "none",
               }}
+              animate={
+                blazing
+                  ? {
+                      boxShadow: [
+                        `inset 0 0 18px ${t.glowRgba}, 0 0 14px ${t.glowRgba}`,
+                        `inset 0 0 36px ${t.glowRgba}, 0 0 36px ${t.glowRgba}`,
+                        `inset 0 0 18px ${t.glowRgba}, 0 0 14px ${t.glowRgba}`,
+                      ],
+                      scale: [1, 1.06, 1],
+                    }
+                  : { scale: 1 }
+              }
+              transition={
+                blazing
+                  ? { duration: 2.0, repeat: Infinity, ease: "easeInOut" }
+                  : { duration: 0.4 }
+              }
             />
           </button>
         );
       })}
 
-      {/* Labels (separate layer so positioning is predictable) */}
+      {/* Labels */}
       {REGIONS.map((r) => {
         const t = CHAMBER_THEME[r.id];
-        const isHover = hovered === r.id;
+        const blazing = mode !== "idle" && isActive(r.id);
+        const isHover = hovered === r.id && interactive;
+        const isDim = dim(r.id);
         const align =
           r.align === "left"
             ? "items-start text-left"
@@ -169,15 +185,15 @@ export default function CortexHero({ className = "" }) {
               left: `${r.lab.x}%`,
               top: `${r.lab.y}%`,
               transform: translate,
-              transition: "opacity 0.35s ease, transform 0.35s ease",
-              opacity: isHover ? 1 : 0.78,
+              transition: "opacity 0.45s ease, transform 0.45s ease",
+              opacity: isDim ? 0.22 : isHover || blazing ? 1 : 0.78,
             }}
           >
             <span
               className="cortex-display italic"
               style={{
-                fontSize: isHover ? "1.5rem" : "1.25rem",
-                color: isHover ? "#F5F2EC" : t.accent,
+                fontSize: blazing || isHover ? "1.5rem" : "1.25rem",
+                color: blazing || isHover ? "#F5F2EC" : t.accent,
                 textShadow:
                   "0 1px 10px rgba(10,10,15,0.95), 0 0 18px rgba(10,10,15,0.85)",
                 fontWeight: 600,
@@ -191,7 +207,7 @@ export default function CortexHero({ className = "" }) {
               className="smallcaps mt-0.5"
               style={{
                 color: "#E8E4DC",
-                opacity: isHover ? 0.95 : 0.55,
+                opacity: blazing || isHover ? 0.95 : 0.55,
                 textShadow: "0 1px 6px rgba(10,10,15,0.95)",
               }}
             >
@@ -202,7 +218,7 @@ export default function CortexHero({ className = "" }) {
               style={{
                 fontSize: "0.78rem",
                 color: t.accent,
-                opacity: isHover ? 0.95 : 0.65,
+                opacity: blazing || isHover ? 0.95 : 0.65,
                 textShadow: "0 1px 6px rgba(10,10,15,0.95)",
                 letterSpacing: "0.01em",
               }}
@@ -216,17 +232,21 @@ export default function CortexHero({ className = "" }) {
       {/* The Forge — central glowing orb */}
       <button
         type="button"
-        onClick={() => onClick("forge")}
-        onMouseEnter={() => setHovered("forge")}
-        onMouseLeave={() => setHovered(null)}
+        onClick={() => handleClick("forge")}
+        onMouseEnter={() => interactive && setHovered("forge")}
+        onMouseLeave={() => interactive && setHovered(null)}
         data-testid="lobe-forge"
-        className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer focus:outline-none"
+        className={`absolute -translate-x-1/2 -translate-y-1/2 focus:outline-none ${
+          interactive ? "cursor-pointer" : "cursor-default pointer-events-none"
+        }`}
         style={{
           left: `${FORGE.x}%`,
           top: `${FORGE.y}%`,
           width: `${FORGE.r * 2}%`,
           height: `${FORGE.r * 2}%`,
           borderRadius: "50%",
+          opacity: dim("forge") && mode !== "idle" ? 0.35 : 1,
+          transition: "opacity 0.45s ease",
         }}
       >
         <motion.span
@@ -238,20 +258,36 @@ export default function CortexHero({ className = "" }) {
             mixBlendMode: "screen",
           }}
           animate={{
-            scale: hovered === "forge" ? [1, 1.12, 1] : [0.9, 1.06, 0.9],
-            opacity: hovered === "forge" ? 1 : [0.78, 1, 0.78],
+            scale:
+              mode !== "idle" && isActive("forge")
+                ? [1, 1.18, 1]
+                : hovered === "forge"
+                ? [1, 1.12, 1]
+                : [0.9, 1.06, 0.9],
+            opacity:
+              mode !== "idle" && isActive("forge")
+                ? [0.85, 1, 0.85]
+                : hovered === "forge"
+                ? 1
+                : [0.78, 1, 0.78],
           }}
-          transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+          transition={{
+            duration: mode !== "idle" && isActive("forge") ? 1.6 : 2.4,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
         />
       </button>
 
       {/* Forge label */}
       <div
-        className="pointer-events-none absolute flex flex-col items-center text-center"
+        className="pointer-events-none absolute flex flex-col items-center text-center whitespace-nowrap"
         style={{
           left: `${FORGE.lab.x}%`,
           top: `${FORGE.lab.y}%`,
           transform: "translate(-50%, -50%)",
+          opacity: dim("forge") ? 0.22 : 1,
+          transition: "opacity 0.45s ease",
         }}
       >
         <span
@@ -259,7 +295,7 @@ export default function CortexHero({ className = "" }) {
           style={{
             color: "#FFE5B4",
             fontWeight: 700,
-            fontSize: hovered === "forge" ? "1.55rem" : "1.35rem",
+            fontSize: hovered === "forge" || (mode !== "idle" && isActive("forge")) ? "1.55rem" : "1.35rem",
             textShadow:
               "0 0 16px rgba(200,74,31,0.85), 0 1px 10px rgba(10,10,15,0.95)",
             transition: "font-size 0.35s ease",
@@ -291,14 +327,20 @@ export default function CortexHero({ className = "" }) {
         </span>
       </div>
 
-      {/* Hover caption beneath */}
+      {/* Hover/status caption beneath */}
       <div
         className="absolute -bottom-12 left-0 right-0 text-center smallcaps text-ash transition-opacity duration-300"
-        style={{ opacity: hovered ? 1 : 0.45 }}
+        style={{ opacity: hovered || mode !== "idle" ? 1 : 0.45 }}
         data-testid="cortex-hover-caption"
       >
         {hovered
           ? `${CHAMBER_THEME[hovered].name} — ${CHAMBER_THEME[hovered].description}`
+          : mode === "deliberating" && activeChambers.length > 0
+          ? activeChambers.length === 1
+            ? `${CHAMBER_THEME[activeChambers[0]].name} is convening`
+            : "A committee is in session"
+          : mode === "verdict" && activeChambers.length > 0
+          ? `Chaired by ${CHAMBER_THEME[activeChambers[0]].name}`
           : "Hover a region. Click to descend."}
       </div>
     </div>
