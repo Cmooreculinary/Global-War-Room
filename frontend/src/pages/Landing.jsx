@@ -209,40 +209,52 @@ export default function Landing() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.55 }}
-              className="mx-auto mt-16 max-w-3xl md:mt-20"
+              className="mx-auto mt-12 max-w-3xl md:mt-16"
             >
-              <ContextWindow
-                question={question}
-                onChange={setQuestion}
-                onConvene={onConvene}
-                error={errorMsg}
-              />
-
-              {/* How it works strip */}
-              <div className="mt-16 grid grid-cols-1 gap-7 sm:grid-cols-3">
+              {/* How it works strip — now sits above the input */}
+              <div className="mx-auto grid max-w-2xl grid-cols-1 gap-6 sm:grid-cols-3">
                 {[
                   ["1", "Bring a question.", "The matter you cannot solve alone."],
                   ["2", "The cortex routes.", "The right chamber convenes its council."],
                   ["3", "A verdict is rendered.", "Deliberated. Integrated. Plainspoken."],
                 ].map(([num, head, sub]) => (
                   <div key={num} data-testid={`how-step-${num}`}>
-                    <p className="cortex-display tabular text-3xl" style={{ color: "#C9A961", fontWeight: 600 }}>
+                    <p className="cortex-display tabular text-2xl" style={{ color: "#C9A961", fontWeight: 600 }}>
                       {num}
                     </p>
-                    <p className="cortex-display mt-1 text-lg text-pearl" style={{ fontWeight: 500 }}>
+                    <p className="cortex-display mt-1 text-base text-pearl" style={{ fontWeight: 500 }}>
                       {head}
                     </p>
-                    <p className="cortex-editorial mt-1 text-sm text-bone/65">{sub}</p>
+                    <p className="cortex-editorial mt-1 text-xs text-bone/65">{sub}</p>
                   </div>
                 ))}
               </div>
 
+              {/* Compact context window (half-width, scrollable) */}
+              <div className="mx-auto mt-10 w-full max-w-xl md:mt-12">
+                <ContextWindow
+                  question={question}
+                  onChange={setQuestion}
+                  onConvene={onConvene}
+                  error={errorMsg}
+                />
+              </div>
+
+              {/* Standalone "Review our Experts" link directly beneath the input */}
+              <div className="mt-8 text-center">
+                <Link
+                  to="/receipts"
+                  className="smallcaps inline-block border-b border-transparent pb-0.5 text-ash transition-colors hover:border-bone/40 hover:text-bone"
+                  style={{ letterSpacing: "0.15em" }}
+                  data-testid="landing-cta-receipts"
+                >
+                  Review our Experts →
+                </Link>
+              </div>
+
               <div className="hairline mt-14" />
 
-              <div className="mt-10 flex flex-wrap items-center justify-center gap-5 text-center">
-                <Link to="/receipts" className="smallcaps text-ash hover:text-bone transition-colors" data-testid="landing-cta-receipts">
-                  Read the receipts →
-                </Link>
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-5 text-center">
                 <Link to="/about" className="smallcaps text-ash hover:text-bone transition-colors" data-testid="landing-cta-about">
                   Why a cortex?
                 </Link>
@@ -337,11 +349,11 @@ function ContextWindow({ question, onChange, onConvene, error }) {
   return (
     <div data-testid="context-window">
       <p className="smallcaps text-center text-ash">The Question</p>
-      <h3 className="cortex-display mt-2 text-center text-2xl italic text-pearl md:text-3xl">
+      <h3 className="cortex-display mt-2 text-center text-xl italic text-pearl md:text-2xl">
         Bring the matter you cannot solve alone.
       </h3>
 
-      <div className="relative mt-8">
+      <div className="relative mt-6">
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
@@ -356,12 +368,13 @@ function ContextWindow({ question, onChange, onConvene, error }) {
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
           placeholder="Speak the matter…"
-          rows={5}
-          className="relative z-10 block w-full resize-none border bg-transparent px-7 py-6 text-bone placeholder:text-ash focus:outline-none cortex-editorial text-[1.08rem] leading-relaxed"
+          rows={3}
+          className="relative z-10 block w-full resize-none overflow-y-auto border bg-transparent px-5 py-4 text-bone placeholder:text-ash focus:outline-none cortex-editorial text-[1rem] leading-relaxed"
           style={{
             borderColor: "#C9A96155",
             borderRadius: 2,
-            minHeight: 168,
+            minHeight: 96,
+            maxHeight: 160,
             boxShadow:
               "inset 0 1px 0 rgba(255,255,255,0.04), inset 0 -1px 0 rgba(0,0,0,0.4), 0 0 0 1px #C9A96110",
           }}

@@ -50,9 +50,10 @@ def test_chamber_senate_council(http):
     assert r.status_code == 200
     data = r.json()
     council = data["council"]
-    assert len(council) == 3
+    assert len(council) >= 3, f"senate should have >=3 members, got {len(council)}"
+    # real-figure personas: Lincoln, Churchill, Aurelius, Burke etc.
     ids = {m["id"] for m in council}
-    assert ids == {"statesman", "strategist", "guardian"}
+    assert ids, "council ids empty"
     for m in council:
         for k in ("id", "name", "lineage", "glyph", "voice_notes"):
             assert k in m and m[k]
@@ -110,11 +111,11 @@ def test_senate_deliberation_shape(senate_verdict):
     assert isinstance(v["verdict"], str) and len(v["verdict"]) > 20
     assert "_id" not in v
     delib = v["deliberation"]
-    assert len(delib) >= 3, f"Expected 3 senate members, got {len(delib)}"
-    members = {d["member"] for d in delib}
-    expected = {"The Statesman", "The Strategist", "The Guardian"}
-    assert expected.issubset(members), f"missing members: {expected - members}"
+    # New real-figure architecture: may be 3 senators (single chamber) OR
+    # committee witnesses (one entry per chamber). Both are valid shapes.
+    assert len(delib) >= 1, f"Expected at least one deliberation entry, got {len(delib)}"
     for d in delib:
+        assert "member" in d and d["member"]
         assert "contribution" in d and d["contribution"]
         assert "dissent" in d
 
@@ -198,3 +199,92 @@ def test_forge_deliberation(http):
     delib = v["deliberation"]
     assert len(delib) == len(wc), "deliberation should have one entry per witness"
     assert "_id" not in v
+
+
+# ---- /api/route (routing) --------------------------------------------- #
+def test_route_empty_question_400(http):
+    r = http.post(f"{API}/route", json={"question": "   "}, timeout=15)
+    assert r.status_code == 400
+
+
+def test_route_returns_valid_chamber(http):
+    r = http.post(
+        f"{API}/route",
+        json={"question": "Should I let go of my co-founder who is no longer growing?"},
+        timeout=60,
+    )
+    assert r.status_code == 200, r.text[:400]
+    data = r.json()
+    assert "chamber_id" in data
+    assert data["chamber_id"] in {"senate", "boardroom", "courtroom", "council", "forge"}
+    assert isinstance(data.get("witnesses", []), list)
+    assert isinstance(data.get("reasoning", ""), str)
+
+
+# ---- /api/transcribe (Whisper STT) ------------------------------------ #
+def _make_silent_wav_bytes(seconds: float = 1.0, rate: int = 16000) -> bytes:
+    """Generate a short silent WAV in-memory (no external deps)."""
+    import io
+    import struct
+    import wave
+
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        n = int(rate * seconds)
+        # write near-silence (tiny sine to avoid pure-zero rejection)
+        frames = b"".join(struct.pack("<h", (i % 7) - 3) for i in range(n))
+        w.writeframes(frames)
+    return buf.getvalue()
+
+
+def test_transcribe_returns_text_field(http):
+    wav = _make_silent_wav_bytes(seconds=1.0)
+    # requests with multipart needs no Content-Type header override
+    r = requests.post(
+        f"{API}/transcribe",
+        files={"audio": ("sample.wav", wav, "audio/wav")},
+        timeout=60,
+    )
+    assert r.status_code == 200, f"status={r.status_code} body={r.text[:400]}"
+    data = r.json()
+    assert "text" in data
+    assert isinstance(data["text"], str)  # may be empty for silence
+
+
+def test_transcribe_missing_file_422(http):
+    r = requests.post(f"{API}/transcribe", timeout=15)
+    # FastAPI returns 422 when required file field is missing
+    assert r.status_code in (400, 422)
+
+
+# ---- /api/speak (OpenAI TTS) ------------------------------------------ #
+def test_speak_returns_mp3_audio(http):
+    payload = {"text": "The cortex has convened.", "chamber_id": "senate"}
+    r = requests.post(f"{API}/speak", json=payload, timeout=60)
+    assert r.status_code == 200, f"status={r.status_code} body={r.text[:400]}"
+    ctype = r.headers.get("content-type", "").lower()
+    assert "audio/mpeg" in ctype, f"unexpected content-type: {ctype}"
+    assert len(r.content) > 500, f"audio body too small: {len(r.content)} bytes"
+    # chamber voice propagated via response header
+    assert r.headers.get("X-Voice", "").lower() in {
+        "onyx", "sage", "fable", "echo", "nova", "alloy", "ash", "coral", "shimmer"
+    }
+
+
+def test_speak_per_chamber_voice_mapping(http):
+    r = requests.post(
+        f"{API}/speak",
+        json={"text": "Committee convened.", "chamber_id": "forge"},
+        timeout=60,
+    )
+    assert r.status_code == 200
+    assert r.headers.get("X-Voice") == "nova"
+
+
+def test_speak_empty_text_400(http):
+    r = requests.post(f"{API}/speak", json={"text": "   "}, timeout=15)
+    assert r.status_code == 400
+

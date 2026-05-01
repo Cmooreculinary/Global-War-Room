@@ -1,0 +1,35 @@
+{
+  "summary": "Second full sweep after SPA refactor + voice integrations. Backend pytest suite expanded to 22 tests covering new endpoints (/api/route, /api/transcribe, /api/speak per-chamber voice) and all pass including real Claude deliberations and OpenAI Whisper/TTS calls. Frontend Playwright verified the new compact landing layout: 1-2-3 how-it-works strip sits ABOVE the question-input, textarea is narrow (576px, max-w-xl) and short (112px, min-h=96/max-h=160), standalone 'Review our Experts →' link sits directly below the input with correct text and data-testid, and 'Why a cortex?' / 'The archive' footer links sit below. Full convene flow works: routing → deliberating → verdict, VerdictAudio mounted and POST /api/speak invoked on play. /receipts page renders real-figure personas (Lincoln, Churchill, Aurelius, Burke, Buffett, Munger). MicButton rendered next to Convene. Fixed two stale backend assertions from iteration_1 (old generic persona ids / 3-member senate shape) to match the new real-figure persona architecture.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_cortex_backend.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "cortex_voice.transcribe_audio: the silent-WAV fallback I tested worked (200 with empty text), but the endpoint returns 200 even when Whisper yields no text. Consider returning 422 for completely empty audio so the frontend can surface a clearer 'nothing heard' message instead of a silent success.",
+    "server.py /api/speak: no length-based cost guard beyond MAX_TTS_CHARS=4000 truncation; a malicious client could hammer the endpoint with large payloads. Consider per-archive_id (or IP) rate limiting and max-char hard rejection (422) instead of silent truncation.",
+    "VerdictAudio.jsx fetches one /api/speak request per deliberation segment plus one for the verdict — a 4-witness committee fires 5 OpenAI TTS calls in sequence. Cached in memory only, so re-mount re-pays the cost. Consider server-side caching keyed on (verdict_id, segment_idx).",
+    "MicButton.jsx uses navigator.mediaDevices.getUserMedia with no HTTPS guard message — on non-secure contexts it'll just fail silently with NotAllowedError. Preview env is HTTPS so not an issue, but add a clearer fallback for localhost dev.",
+    "Landing.jsx ContextWindow: the minHeight/maxHeight are hard-coded inline (96/160). Fine, but if you later theme the editor, extract into Tailwind classes so it's themeable.",
+    "Backend: no dedicated test for /api/verdicts persistence of voice-related fields; /api/speak is stateless (no DB write) which is correct, but that's worth documenting in the endpoint docstring."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_cortex_backend.py — added 8 new tests (/api/route x2, /api/transcribe x2, /api/speak x3, plus silent-WAV helper), fixed 2 stale assertions from iteration_1"
+  ],
+  "success_rate": {"backend": "100% (22/22 pytest)", "frontend": "100% (all data-testids, layout order, CTA text, convene flow, VerdictAudio, /api/speak invocation, /receipts verified)"},
+  "test_credentials": "n/a — no auth; EMERGENT_LLM_KEY in backend/.env provides Claude + OpenAI access",
+  "seed_data_creation": "Backend tests create 1 Senate verdict + 1 Forge verdict under archive_id=test-archive-cortex-<8hex>. Verdicts are isolated per archive_id. No cleanup needed (archive_id is per-run UUID).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests at /app/backend/tests/test_cortex_backend.py (22 tests, ~90s with real LLM+TTS+STT calls). Use localhost:8001 for backend-only tests. New endpoints: POST /api/route (returns {chamber_id, witnesses, reasoning}), POST /api/transcribe (multipart 'audio' field, returns {text}), POST /api/speak (returns audio/mpeg with X-Voice header). Chamber→voice mapping: senate=onyx, boardroom=sage, courtroom=fable, council=echo, forge=nova. Frontend single-page at /, auto-routes via /api/route→/api/deliberate. Landing textarea is max-w-xl (576px) / min-h=96 / max-h=160 with scrolling. how-step-1/2/3 are ABOVE input; landing-cta-receipts (text 'Review our Experts →') directly below; landing-cta-about + landing-cta-archive at footer. MicButton has data-testid='mic-button', VerdictAudio has 'verdict-audio' + 'verdict-audio-play'. Note: Senate deliberation sometimes returns 2-chamber committee (Senate+Boardroom) rather than 3 in-chamber members depending on question — deliberation shape is now flexible.",
+  "rca of the issue": "n/a — no defects found in this iteration. Two stale assertions from iteration_1 updated to match the new real-figure persona architecture (4 senators: Lincoln, Churchill, Aurelius, Burke — not the generic statesman/strategist/guardian; and deliberation may render as committee witnesses rather than strict 3-member shape)."
+}
