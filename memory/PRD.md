@@ -32,16 +32,19 @@ A judicial-anatomical AI judgment system modeled on the human brain. Five chambe
 Each persona carries a `sources` ledger (books, speeches, letters, biographies) surfaced on `/receipts`. System prompt is explicit: "These voices are reconstructions, not channelings." The Receipts page shows the disclaimer + every voice + every source we reasoned from.
 
 ## Implemented (Feb 2026)
-- ✅ Anatomical SVG cortex landing — 4 lobes + Forge at center, breathing animation, hover descend, click-through routing
-- ✅ All 5 chambers (Senate, Boardroom, Court Room, Council) — full visual identity, atmospheric overlays, council member cards with archetype glyphs and lineages
-- ✅ The Forge with 4-quadrant chamber-witness preview (live keyword classification) and "called witnesses" indicator after deliberation
-- ✅ Question submission → deliberation → verdict flow with sequential 200ms-stagger reveal
+- ✅ Anatomical cortex landing — real brain image with 5 lobes + Forge hotspots, breathing animation, hover descend
+- ✅ All 5 chambers (Senate, Boardroom, Court Room, Council, Forge) — real-figure personas with `/receipts` credentials
+- ✅ Question submission → deliberation → verdict flow with sequential stagger reveal, committee banner when witnesses > 1
 - ✅ Verdict layout with dropped capital, dissent markers, chamber-color treatment
 - ✅ Archive (MongoDB-persisted, per-browser id) with bento grid, save/share/remove
-- ✅ Shareable verdict URLs (`/verdict/:id`)
-- ✅ About page with editorial long-form
-- ✅ Backend: `/api/chambers`, `/api/chambers/:id`, `/api/deliberate`, `/api/verdicts/:id`, `/api/verdicts/:id/save`, `DELETE /api/verdicts/:id`, `GET /api/verdicts`
+- ✅ Shareable verdict URLs (`/verdict/:id`), About page with long-form editorial
+- ✅ Backend: `/api/chambers`, `/api/chambers/:id`, `/api/deliberate`, `/api/route`, `/api/transcribe`, `/api/speak`, `/api/verdicts/:id`, `/api/verdicts/:id/save`, `DELETE /api/verdicts/:id`, `GET /api/verdicts`
 - ✅ Cortex design system: CSS variables, Cormorant Garamond / Source Serif 4 / DM Sans, judicial-anatomical palette
+- ✅ **Single-page app pivot (Feb 2026)** — `Landing.jsx` holds the whole experience; `/api/route` auto-selects the chair + witnesses; brain lights up the routed lobes
+- ✅ **Voice-to-Text (Feb 2026)** — `MicButton.jsx` + OpenAI Whisper via `/api/transcribe`
+- ✅ **Text-to-Speech (Feb 2026)** — `VerdictAudio.jsx` + OpenAI TTS via `/api/speak`, per-chamber voice mapping (senate=onyx, boardroom=sage, courtroom=fable, council=echo, forge=nova)
+- ✅ **Compact landing layout (Feb 2026)** — 1-2-3 How-it-works strip ABOVE input, narrow (`max-w-xl`) scrollable textarea, standalone "Review our Experts →" link directly below input
+- ✅ **End-to-end test sweep (Feb 2026)** — 22/22 backend pytest + full frontend Playwright pass (iteration_2)
 
 ## Backlog
 ### P1 — Polish
