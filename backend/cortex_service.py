@@ -80,6 +80,7 @@ async def route_question(question: str) -> dict:
     so the brain can light up before the slow deliberation begins.
     Returns: {chamber_id, witnesses, reasoning}
     """
+    result: dict = {}
     try:
         result = await _ask_json(auto_router_prompt(), question)
     except Exception as e:
@@ -96,10 +97,11 @@ async def route_question(question: str) -> dict:
         if cid in VALID_LOBE_CHAMBERS and cid != home
     ][:3]
 
+    reasoning = result.get("reasoning", "")
     return {
         "chamber_id": home,
         "witnesses": witnesses,
-        "reasoning": result.get("reasoning", ""),
+        "reasoning": reasoning,
     }
 
 

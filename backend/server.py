@@ -173,10 +173,10 @@ async def transcribe(audio: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="No audio file provided")
     try:
         text = await transcribe_audio(audio.file, audio.filename)
+        return TranscribeResponse(text=text or "")
     except Exception as e:
         logger.exception("Transcription failed")
         raise HTTPException(status_code=502, detail="Transcription failed") from e
-    return TranscribeResponse(text=text or "")
 
 
 @api_router.post("/speak")
@@ -185,19 +185,19 @@ async def speak(req: SpeakRequest):
     voice = req.voice or voice_for_chamber(req.chamber_id)
     try:
         audio_bytes = await synthesize_speech(req.text, voice=voice)
+        return Response(
+            content=audio_bytes,
+            media_type="audio/mpeg",
+            headers={
+                "Cache-Control": "private, max-age=3600",
+                "X-Voice": voice,
+            },
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.exception("Speech synthesis failed")
         raise HTTPException(status_code=502, detail="Speech synthesis failed") from e
-    return Response(
-        content=audio_bytes,
-        media_type="audio/mpeg",
-        headers={
-            "Cache-Control": "private, max-age=3600",
-            "X-Voice": voice,
-        },
-    )
 
 
 @api_router.post("/deliberate", response_model=Verdict)

@@ -103,20 +103,31 @@ def senate_verdict(http):
     return r.json()
 
 
-def test_senate_deliberation_shape(senate_verdict):
+def test_senate_chamber_metadata(senate_verdict):
     v = senate_verdict
     assert v["chamber"] == "The Senate"
     assert v["chamber_id"] == "senate"
-    assert isinstance(v["id"], str) and len(v["id"]) > 0
-    assert isinstance(v["verdict"], str) and len(v["verdict"]) > 20
     assert "_id" not in v
-    delib = v["deliberation"]
+
+
+def test_senate_verdict_has_id(senate_verdict):
+    v = senate_verdict
+    assert isinstance(v["id"], str) and len(v["id"]) > 0
+
+
+def test_senate_verdict_text(senate_verdict):
+    assert isinstance(senate_verdict["verdict"], str)
+    assert len(senate_verdict["verdict"]) > 20
+
+
+def test_senate_deliberation_shape(senate_verdict):
+    delib = senate_verdict["deliberation"]
     # New real-figure architecture: may be 3 senators (single chamber) OR
     # committee witnesses (one entry per chamber). Both are valid shapes.
-    assert len(delib) >= 1, f"Expected at least one deliberation entry, got {len(delib)}"
+    assert len(delib) >= 1
     for d in delib:
-        assert "member" in d and d["member"]
-        assert "contribution" in d and d["contribution"]
+        assert d.get("member")
+        assert d.get("contribution")
         assert "dissent" in d
 
 
@@ -176,7 +187,8 @@ def test_delete_unsaves(http, senate_verdict):
 
 
 # ---- Forge multi-call deliberation (real LLM, slow) ------------------ #
-def test_forge_deliberation(http):
+@pytest.fixture(scope="module")
+def forge_verdict(http):
     payload = {
         "chamber_id": "forge",
         "question": ("My business is succeeding but my marriage is suffering, "
@@ -189,16 +201,30 @@ def test_forge_deliberation(http):
     print(f"\nForge deliberation: {time.time()-t0:.1f}s, status={r.status_code}")
     if r.status_code != 200:
         pytest.fail(f"Forge deliberate failed: {r.status_code} {r.text[:500]}")
-    v = r.json()
-    assert v["chamber"] == "The Forge"
-    assert v["chamber_id"] == "forge"
-    assert isinstance(v["verdict"], str) and len(v["verdict"]) > 20
-    wc = v.get("witnesses_called") or []
+    return r.json()
+
+
+def test_forge_chamber_metadata(forge_verdict):
+    assert forge_verdict["chamber"] == "The Forge"
+    assert forge_verdict["chamber_id"] == "forge"
+    assert "_id" not in forge_verdict
+
+
+def test_forge_verdict_text(forge_verdict):
+    assert isinstance(forge_verdict["verdict"], str)
+    assert len(forge_verdict["verdict"]) > 20
+
+
+def test_forge_witnesses_called(forge_verdict):
+    wc = forge_verdict.get("witnesses_called") or []
     assert isinstance(wc, list) and len(wc) >= 1
     assert set(wc).issubset({"senate", "boardroom", "courtroom", "council"})
-    delib = v["deliberation"]
+
+
+def test_forge_deliberation_aligned_with_witnesses(forge_verdict):
+    wc = forge_verdict.get("witnesses_called") or []
+    delib = forge_verdict["deliberation"]
     assert len(delib) == len(wc), "deliberation should have one entry per witness"
-    assert "_id" not in v
 
 
 # ---- /api/route (routing) --------------------------------------------- #

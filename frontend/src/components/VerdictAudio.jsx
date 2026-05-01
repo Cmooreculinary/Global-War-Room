@@ -7,13 +7,12 @@
 //   - Committee verdict → each witness in its OWN chamber voice, then the chair
 //     reads the synthesized verdict last.
 //
-// Caches blob URLs so replay doesn't re-fetch from OpenAI.
-import React, { useEffect, useMemo, useRef, useState } from "react";
+// Playback lifecycle + blob URL cache live in `useAudioPlayer`.
+import React, { useMemo } from "react";
 import { motion } from "framer-motion";
-import { toast } from "sonner";
 
 import { CHAMBER_THEME } from "@/lib/chambers";
-import { speakAudioUrl } from "@/lib/api";
+import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 
 const NAME_TO_ID = {
   "The Senate": "senate",
@@ -26,7 +25,10 @@ const NAME_TO_ID = {
 function buildSegments(verdict) {
   const segments = [];
   const chairId = verdict.chamber_id;
-  const isCommittee = verdict.committee && Array.isArray(verdict.witnesses_called) && verdict.witnesses_called.length > 1;
+  const isCommittee =
+    verdict.committee &&
+    Array.isArray(verdict.witnesses_called) &&
+    verdict.witnesses_called.length > 1;
 
   for (const d of verdict.deliberation || []) {
     const witnessChamber = isCommittee ? NAME_TO_ID[d.member] || chairId : chairId;
@@ -46,135 +48,10 @@ function buildSegments(verdict) {
 
 export default function VerdictAudio({ verdict }) {
   const segments = useMemo(() => buildSegments(verdict), [verdict]);
-  const [playing, setPlaying] = useState(false);
-  const [activeIdx, setActiveIdx] = useState(-1); // -1 = not started
-  const [loadingIdx, setLoadingIdx] = useState(-1);
-  const audioRef = useRef(null);
-  const cacheRef = useRef(new Map()); // idx -> blob url
-  const stoppedRef = useRef(false);
-
-  // Setup audio element on mount
-  useEffect(() => {
-    audioRef.current = new Audio();
-    audioRef.current.preload = "auto";
-    return () => {
-      stoppedRef.current = true;
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = "";
-        audioRef.current = null;
-      }
-      // Revoke any cached blob URLs
-      cacheRef.current.forEach((url) => URL.revokeObjectURL(url));
-      cacheRef.current.clear();
-    };
-  }, []);
-
-  // Reset cache when verdict changes
-  useEffect(() => {
-    stop();
-    cacheRef.current.forEach((url) => URL.revokeObjectURL(url));
-    cacheRef.current.clear();
-    setActiveIdx(-1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [verdict?.id]);
-
-  const fetchSegment = async (idx) => {
-    if (cacheRef.current.has(idx)) return cacheRef.current.get(idx);
-    const seg = segments[idx];
-    const url = await speakAudioUrl(seg.text, seg.chamberId);
-    cacheRef.current.set(idx, url);
-    return url;
-  };
-
-  const playFrom = async (startIdx) => {
-    if (!audioRef.current) return;
-    stoppedRef.current = false;
-    setPlaying(true);
-    let idx = startIdx;
-    while (idx < segments.length && !stoppedRef.current) {
-      try {
-        setLoadingIdx(idx);
-        const url = await fetchSegment(idx);
-        if (stoppedRef.current) return;
-        setLoadingIdx(-1);
-        setActiveIdx(idx);
-        audioRef.current.src = url;
-        // Begin pre-fetching next segment in parallel.
-        if (idx + 1 < segments.length && !cacheRef.current.has(idx + 1)) {
-          fetchSegment(idx + 1).catch(() => {});
-        }
-        await playUntilEnd(audioRef.current);
-        if (stoppedRef.current) return;
-        idx += 1;
-      } catch (e) {
-        toast.error("Playback failed. Try again.");
-        break;
-      }
-    }
-    if (!stoppedRef.current) {
-      // Finished naturally
-      setPlaying(false);
-      setActiveIdx(-1);
-    }
-  };
-
-  const playUntilEnd = (audio) =>
-    new Promise((resolve, reject) => {
-      const onEnded = () => {
-        cleanup();
-        resolve();
-      };
-      const onError = (e) => {
-        cleanup();
-        reject(e);
-      };
-      const cleanup = () => {
-        audio.removeEventListener("ended", onEnded);
-        audio.removeEventListener("error", onError);
-      };
-      audio.addEventListener("ended", onEnded);
-      audio.addEventListener("error", onError);
-      audio.play().catch(reject);
-    });
-
-  const stop = () => {
-    stoppedRef.current = true;
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
-    setPlaying(false);
-    setLoadingIdx(-1);
-  };
-
-  const onPlayPause = () => {
-    if (playing) {
-      // pause without losing position
-      if (audioRef.current && !audioRef.current.paused) {
-        audioRef.current.pause();
-        setPlaying(false);
-      } else if (audioRef.current && audioRef.current.paused && activeIdx >= 0) {
-        audioRef.current.play();
-        setPlaying(true);
-      }
-    } else {
-      // start or resume
-      if (activeIdx < 0) {
-        playFrom(0);
-      } else if (audioRef.current && audioRef.current.paused) {
-        audioRef.current.play();
-        setPlaying(true);
-      } else {
-        playFrom(activeIdx);
-      }
-    }
-  };
-
-  const onRestart = () => {
-    stop();
-    setActiveIdx(-1);
-    setTimeout(() => playFrom(0), 50);
-  };
+  const { playing, activeIdx, loadingIdx, togglePlayPause, restart } = useAudioPlayer(
+    segments,
+    verdict?.id
+  );
 
   const chairTheme = CHAMBER_THEME[verdict.chamber_id] || CHAMBER_THEME.senate;
   const currentLabel =
@@ -182,42 +59,18 @@ export default function VerdictAudio({ verdict }) {
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-3" data-testid="verdict-audio">
-      <button
-        type="button"
-        onClick={onPlayPause}
-        className="cortex-ui inline-flex items-center gap-3 border px-5 py-2.5 text-sm transition-colors"
-        style={{
-          borderColor: chairTheme.accent,
-          color: "#F5F2EC",
-          background: playing ? `${chairTheme.primary}22` : "transparent",
-          borderRadius: 2,
-        }}
-        data-testid="verdict-audio-play"
-        aria-label={playing ? "Pause" : "Listen to the verdict"}
-      >
-        <motion.span
-          aria-hidden
-          className="inline-flex"
-          animate={playing ? { opacity: [0.6, 1, 0.6] } : { opacity: 1 }}
-          transition={{ duration: 1.4, repeat: playing ? Infinity : 0, ease: "easeInOut" }}
-        >
-          {playing ? <PauseIcon /> : <PlayIcon />}
-        </motion.span>
-        <span>
-          {loadingIdx >= 0
-            ? "Loading…"
-            : playing
-            ? "Pause"
-            : activeIdx >= 0
-            ? "Resume"
-            : "Listen to the verdict"}
-        </span>
-      </button>
+      <PlayPauseButton
+        playing={playing}
+        activeIdx={activeIdx}
+        loadingIdx={loadingIdx}
+        chairTheme={chairTheme}
+        onClick={togglePlayPause}
+      />
 
       {activeIdx >= 0 && (
         <button
           type="button"
-          onClick={onRestart}
+          onClick={restart}
           className="smallcaps text-ash hover:text-bone transition-colors"
           data-testid="verdict-audio-restart"
         >
@@ -226,18 +79,66 @@ export default function VerdictAudio({ verdict }) {
       )}
 
       {currentLabel && (
-        <span
-          className="cortex-editorial italic text-sm text-bone/65"
-          data-testid="verdict-audio-now-playing"
-        >
-          {playing ? "Now reading: " : "Paused at: "}
-          <span style={{ color: chairTheme.accent }}>{currentLabel}</span>
-          <span className="ml-2 smallcaps tabular text-ash">
-            {Math.min(activeIdx + 1, segments.length)} / {segments.length}
-          </span>
-        </span>
+        <NowPlayingLabel
+          playing={playing}
+          accent={chairTheme.accent}
+          label={currentLabel}
+          activeIdx={activeIdx}
+          total={segments.length}
+        />
       )}
     </div>
+  );
+}
+
+function PlayPauseButton({ playing, activeIdx, loadingIdx, chairTheme, onClick }) {
+  const buttonText =
+    loadingIdx >= 0
+      ? "Loading…"
+      : playing
+      ? "Pause"
+      : activeIdx >= 0
+      ? "Resume"
+      : "Listen to the verdict";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="cortex-ui inline-flex items-center gap-3 border px-5 py-2.5 text-sm transition-colors"
+      style={{
+        borderColor: chairTheme.accent,
+        color: "#F5F2EC",
+        background: playing ? `${chairTheme.primary}22` : "transparent",
+        borderRadius: 2,
+      }}
+      data-testid="verdict-audio-play"
+      aria-label={playing ? "Pause" : "Listen to the verdict"}
+    >
+      <motion.span
+        aria-hidden
+        className="inline-flex"
+        animate={playing ? { opacity: [0.6, 1, 0.6] } : { opacity: 1 }}
+        transition={{ duration: 1.4, repeat: playing ? Infinity : 0, ease: "easeInOut" }}
+      >
+        {playing ? <PauseIcon /> : <PlayIcon />}
+      </motion.span>
+      <span>{buttonText}</span>
+    </button>
+  );
+}
+
+function NowPlayingLabel({ playing, accent, label, activeIdx, total }) {
+  return (
+    <span
+      className="cortex-editorial italic text-sm text-bone/65"
+      data-testid="verdict-audio-now-playing"
+    >
+      {playing ? "Now reading: " : "Paused at: "}
+      <span style={{ color: accent }}>{label}</span>
+      <span className="ml-2 smallcaps tabular text-ash">
+        {Math.min(activeIdx + 1, total)} / {total}
+      </span>
+    </span>
   );
 }
 
