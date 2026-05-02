@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, ConfigDict, Field
@@ -18,6 +18,13 @@ load_dotenv(ROOT_DIR / ".env")
 
 from cortex_service import deliberate_forge, deliberate_with_committee, route_question  # noqa: E402
 from cortex_voice import synthesize_speech, transcribe_audio, voice_for_chamber  # noqa: E402
+from court_service import (  # noqa: E402
+    amend_verdict,
+    make_share_path,
+    public_session,
+    route_and_panel,
+    run_deliberation,
+)
 from personas import CHAMBERS, RECONSTRUCTION_DISCLAIMER  # noqa: E402
 
 mongo_url = os.environ["MONGO_URL"]
@@ -125,6 +132,28 @@ class SpeakRequest(BaseModel):
     text: str
     chamber_id: Optional[str] = None
     voice: Optional[str] = None
+
+
+# ---- Court session models ------------------------------------------------ #
+
+class CourtCreateRequest(BaseModel):
+    question: str
+    host_name: Optional[str] = None
+    archive_id: Optional[str] = None
+
+
+class CourtJoinRequest(BaseModel):
+    name: str
+
+
+class CourtBeginRequest(BaseModel):
+    attendee_id: str  # host marker — only the host can begin
+
+
+class CourtObjectRequest(BaseModel):
+    attendee_id: str
+    name: str
+    content: str
 
 
 # --------------------------------------------------------------------------- #
@@ -289,6 +318,218 @@ async def list_archive(archive_id: str = Query(...)):
             doc["created_at"] = datetime.fromisoformat(doc["created_at"])
         out.append(Verdict(**doc))
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Court Sessions — invite-witness courtroom flow                              #
+# --------------------------------------------------------------------------- #
+
+async def _run_court_deliberation(session_id: str):
+    """Background task: route + deliberate + write verdict to the session."""
+    session = await db.court_sessions.find_one({"id": session_id}, {"_id": 0})
+    if not session:
+        return
+    try:
+        payload = await run_deliberation(session["chamber_id"], session["question"])
+        await db.court_sessions.update_one(
+            {"id": session_id},
+            {"$set": {
+                "status": "objection_window",
+                "deliberation": payload.get("deliberation", []),
+                "verdict": payload.get("verdict", ""),
+                "committee": bool(payload.get("committee", False)),
+                "witnesses_called": payload.get("witnesses_called") or session.get("witnesses_called", []),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+    except Exception:
+        logger.exception("Court deliberation failed for %s", session_id)
+        await db.court_sessions.update_one(
+            {"id": session_id},
+            {"$set": {"status": "error", "updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+
+
+async def _run_court_amendment(session_id: str, objector_name: str, content: str):
+    """Background task: re-deliberate after an objection."""
+    session = await db.court_sessions.find_one({"id": session_id}, {"_id": 0})
+    if not session:
+        return
+    try:
+        result = await amend_verdict(
+            chamber_id=session["chamber_id"],
+            question=session["question"],
+            original_verdict=session.get("verdict", ""),
+            objector_name=objector_name,
+            objection_content=content,
+        )
+        await db.court_sessions.update_one(
+            {"id": session_id},
+            {"$set": {
+                "status": "amended",
+                "amended_verdict": result.get("amended_verdict", ""),
+                "amendment_ruling": result.get("ruling", "amend"),
+                "amendment_concession": result.get("concession", ""),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+    except Exception:
+        logger.exception("Court amendment failed for %s", session_id)
+        await db.court_sessions.update_one(
+            {"id": session_id},
+            {"$set": {"status": "error", "updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+
+
+@api_router.post("/court/create")
+async def court_create(req: CourtCreateRequest):
+    """Create a new court session. Routes the question, freezes the panel, returns share link."""
+    q = req.question.strip()
+    if not q:
+        raise HTTPException(status_code=400, detail="Question is required")
+    routing = await route_and_panel(q)
+
+    host_attendee_id = str(uuid.uuid4())
+    session_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    host_name = (req.host_name or "Host").strip()[:40] or "Host"
+
+    session = {
+        "id": session_id,
+        "host_archive_id": req.archive_id,
+        "question": q,
+        "chamber_id": routing["chamber_id"],
+        "witnesses_called": routing["witnesses_called"],
+        "panel": routing["panel"],
+        "reasoning": routing.get("reasoning", ""),
+        "attendees": [{
+            "id": host_attendee_id,
+            "name": host_name,
+            "is_host": True,
+            "joined_at": now,
+        }],
+        "status": "open",  # open -> deliberating -> objection_window -> closed/amended
+        "deliberation": [],
+        "verdict": None,
+        "amended_verdict": None,
+        "amendment_ruling": None,
+        "amendment_concession": None,
+        "objection": None,
+        "committee": False,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.court_sessions.insert_one(session)
+    return {
+        "session_id": session_id,
+        "share_path": make_share_path(session_id),
+        "host_attendee_id": host_attendee_id,
+        "session": public_session(session),
+    }
+
+
+@api_router.get("/court/{session_id}")
+async def court_get(session_id: str):
+    session = await db.court_sessions.find_one({"id": session_id}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=404, detail="Court session not found")
+    return public_session(session)
+
+
+@api_router.post("/court/{session_id}/join")
+async def court_join(session_id: str, req: CourtJoinRequest):
+    name = req.name.strip()[:40]
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    session = await db.court_sessions.find_one({"id": session_id}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=404, detail="Court session not found")
+    if session["status"] not in ("open", "deliberating", "objection_window"):
+        # closed sessions still let people view but not join
+        raise HTTPException(status_code=409, detail="This court is no longer accepting witnesses")
+
+    attendee_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    attendee = {"id": attendee_id, "name": name, "is_host": False, "joined_at": now}
+    await db.court_sessions.update_one(
+        {"id": session_id},
+        {"$push": {"attendees": attendee}, "$set": {"updated_at": now}},
+    )
+    return {"attendee_id": attendee_id}
+
+
+@api_router.post("/court/{session_id}/begin", status_code=202)
+async def court_begin(session_id: str, req: CourtBeginRequest, background_tasks: BackgroundTasks):
+    session = await db.court_sessions.find_one({"id": session_id}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=404, detail="Court session not found")
+    host = next((a for a in session["attendees"] if a.get("is_host")), None)
+    if not host or host["id"] != req.attendee_id:
+        raise HTTPException(status_code=403, detail="Only the host may convene the court")
+    if session["status"] != "open":
+        raise HTTPException(status_code=409, detail="Court has already convened")
+    await db.court_sessions.update_one(
+        {"id": session_id},
+        {"$set": {
+            "status": "deliberating",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    background_tasks.add_task(_run_court_deliberation, session_id)
+    return {"ok": True}
+
+
+@api_router.post("/court/{session_id}/object", status_code=202)
+async def court_object(session_id: str, req: CourtObjectRequest, background_tasks: BackgroundTasks):
+    content = req.content.strip()
+    name = req.name.strip()[:40]
+    if not content:
+        raise HTTPException(status_code=400, detail="Objection content is required")
+    session = await db.court_sessions.find_one({"id": session_id}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=404, detail="Court session not found")
+    if session["status"] != "objection_window":
+        raise HTTPException(status_code=409, detail="The court is not accepting objections")
+    attendee = next((a for a in session["attendees"] if a["id"] == req.attendee_id), None)
+    if not attendee:
+        raise HTTPException(status_code=403, detail="You are not seated in this court")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.court_sessions.update_one(
+        {"id": session_id},
+        {"$set": {
+            "status": "objection",
+            "objection": {
+                "by_attendee_id": req.attendee_id,
+                "by_name": name or attendee.get("name") or "A witness",
+                "content": content,
+                "created_at": now,
+            },
+            "updated_at": now,
+        }},
+    )
+    background_tasks.add_task(_run_court_amendment, session_id, name or attendee.get("name", "A witness"), content)
+    return {"ok": True}
+
+
+@api_router.post("/court/{session_id}/close")
+async def court_close(session_id: str, req: CourtBeginRequest):
+    session = await db.court_sessions.find_one({"id": session_id}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=404, detail="Court session not found")
+    host = next((a for a in session["attendees"] if a.get("is_host")), None)
+    if not host or host["id"] != req.attendee_id:
+        raise HTTPException(status_code=403, detail="Only the host may close the court")
+    if session["status"] not in ("objection_window", "amended"):
+        raise HTTPException(status_code=409, detail="This court cannot be closed yet")
+    await db.court_sessions.update_one(
+        {"id": session_id},
+        {"$set": {
+            "status": "closed",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    return {"ok": True}
 
 
 # --------------------------------------------------------------------------- #

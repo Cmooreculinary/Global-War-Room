@@ -78,3 +78,43 @@ export async function fetchArchive() {
   });
   return data;
 }
+
+// ---- Court session API ---------------------------------------------------- //
+
+export async function createCourtSession({ question, hostName }) {
+  const { data } = await http.post(`/court/create`, {
+    question,
+    host_name: hostName,
+    archive_id: getArchiveId(),
+  });
+  return data; // { session_id, share_path, host_attendee_id, session }
+}
+
+export async function fetchCourtSession(sessionId) {
+  const { data } = await http.get(`/court/${sessionId}`);
+  return data;
+}
+
+export async function joinCourtSession(sessionId, name) {
+  const { data } = await http.post(`/court/${sessionId}/join`, { name });
+  return data; // { attendee_id }
+}
+
+export async function beginCourt(sessionId, attendeeId) {
+  const { data } = await http.post(`/court/${sessionId}/begin`, { attendee_id: attendeeId });
+  return data;
+}
+
+export async function objectInCourt(sessionId, { attendeeId, name, content }) {
+  const { data } = await http.post(`/court/${sessionId}/object`, {
+    attendee_id: attendeeId,
+    name,
+    content,
+  });
+  return data;
+}
+
+export async function closeCourt(sessionId, attendeeId) {
+  const { data } = await http.post(`/court/${sessionId}/close`, { attendee_id: attendeeId });
+  return data;
+}
