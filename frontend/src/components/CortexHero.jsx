@@ -420,7 +420,7 @@ function HoverCaption({ mode, hovered, activeChambers, demoActiveId }) {
   const visible = !!hovered || mode !== "idle" || !!demoActiveId;
   return (
     <div
-      className="absolute -bottom-12 left-0 right-0 text-center smallcaps text-ash transition-opacity duration-500"
+      className="absolute -bottom-2 left-0 right-0 text-center smallcaps text-ash transition-opacity duration-500"
       style={{ opacity: visible ? 0.85 : 0 }}
       data-testid="cortex-hover-caption"
     >
