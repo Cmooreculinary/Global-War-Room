@@ -7,7 +7,7 @@
 //   "verdict"      — only `activeChambers` glow steadily (no pulse); others dim
 //
 // All coordinates are PERCENTAGES of the square image box.
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CHAMBER_THEME } from "@/lib/chambers";
@@ -22,6 +22,10 @@ const REGIONS = [
 
 const FORGE = { x: 53, y: 44, r: 6, lab: { x: 53, y: 70 } };
 
+// Cycle order for the idle "demo" loop — each lobe lights up in turn.
+const DEMO_CYCLE = ["senate", "boardroom", "courtroom", "council", "forge"];
+const DEMO_INTERVAL_MS = 1800;
+
 export default function CortexHero({
   className = "",
   mode = "idle",
@@ -30,9 +34,23 @@ export default function CortexHero({
 }) {
   const navigate = useNavigate();
   const [hovered, setHovered] = useState(null);
+  const [demoIdx, setDemoIdx] = useState(0);
   const brain = getImage("brain_hero");
 
   const interactive = mode === "idle";
+
+  // Idle demo-cycle: tick a cursor through DEMO_CYCLE so the brain self-demos.
+  // Pause when the user hovers a lobe.
+  useEffect(() => {
+    if (!interactive || hovered) return undefined;
+    const id = setInterval(
+      () => setDemoIdx((i) => (i + 1) % DEMO_CYCLE.length),
+      DEMO_INTERVAL_MS
+    );
+    return () => clearInterval(id);
+  }, [interactive, hovered]);
+
+  const demoActiveId = interactive && !hovered ? DEMO_CYCLE[demoIdx] : null;
 
   const handleClick = useCallback(
     (id) => {
@@ -72,6 +90,7 @@ export default function CortexHero({
           hovered={hovered}
           setHovered={setHovered}
           isActive={isActive(r.id)}
+          isDemo={demoActiveId === r.id}
           onClick={handleClick}
         />
       ))}
@@ -85,6 +104,7 @@ export default function CortexHero({
           hovered={hovered}
           isActive={isActive(r.id)}
           isDim={dim(r.id)}
+          isDemo={demoActiveId === r.id}
         />
       ))}
 
@@ -95,6 +115,7 @@ export default function CortexHero({
         setHovered={setHovered}
         isActive={isActive("forge")}
         isDim={dim("forge")}
+        isDemo={demoActiveId === "forge"}
         onClick={handleClick}
       />
       <ForgeLabel
@@ -102,8 +123,14 @@ export default function CortexHero({
         hovered={hovered}
         isActive={isActive("forge")}
         isDim={dim("forge")}
+        isDemo={demoActiveId === "forge"}
       />
-      <HoverCaption mode={mode} hovered={hovered} activeChambers={activeChambers} />
+      <HoverCaption
+        mode={mode}
+        hovered={hovered}
+        activeChambers={activeChambers}
+        demoActiveId={demoActiveId}
+      />
     </div>
   );
 }
@@ -157,9 +184,9 @@ function BreathingVeil() {
   );
 }
 
-function LobeHotspot({ region, mode, interactive, hovered, setHovered, isActive, onClick }) {
+function LobeHotspot({ region, mode, interactive, hovered, setHovered, isActive, isDemo, onClick }) {
   const t = CHAMBER_THEME[region.id];
-  const blazing = mode !== "idle" && isActive;
+  const blazing = (mode !== "idle" && isActive) || isDemo;
   const isHover = hovered === region.id && interactive;
   const showGlow = isHover || blazing;
   const onEnter = () => interactive && setHovered(region.id);
@@ -225,9 +252,9 @@ function PulsingRing({ theme, blazing, isHover, showGlow }) {
   );
 }
 
-function LobeLabel({ region, mode, interactive, hovered, isActive, isDim }) {
+function LobeLabel({ region, mode, interactive, hovered, isActive, isDim, isDemo }) {
   const t = CHAMBER_THEME[region.id];
-  const blazing = mode !== "idle" && isActive;
+  const blazing = (mode !== "idle" && isActive) || isDemo;
   const isHover = hovered === region.id && interactive;
   const align =
     region.align === "left"
@@ -293,10 +320,10 @@ function LobeLabel({ region, mode, interactive, hovered, isActive, isDim }) {
   );
 }
 
-function ForgeOrb({ mode, interactive, hovered, setHovered, isActive, isDim, onClick }) {
+function ForgeOrb({ mode, interactive, hovered, setHovered, isActive, isDim, isDemo, onClick }) {
   const onEnter = () => interactive && setHovered("forge");
   const onLeave = () => interactive && setHovered(null);
-  const isLit = mode !== "idle" && isActive;
+  const isLit = (mode !== "idle" && isActive) || isDemo;
   const isHover = hovered === "forge";
 
   return (
@@ -341,8 +368,8 @@ function ForgeOrb({ mode, interactive, hovered, setHovered, isActive, isDim, onC
   );
 }
 
-function ForgeLabel({ mode, hovered, isActive, isDim }) {
-  const isLit = (mode !== "idle" && isActive) || hovered === "forge";
+function ForgeLabel({ mode, hovered, isActive, isDim, isDemo }) {
+  const isLit = (mode !== "idle" && isActive) || hovered === "forge" || isDemo;
   return (
     <div
       className="pointer-events-none absolute flex flex-col items-center text-center whitespace-nowrap"
@@ -388,13 +415,13 @@ function ForgeLabel({ mode, hovered, isActive, isDim }) {
   );
 }
 
-function HoverCaption({ mode, hovered, activeChambers }) {
-  const text = captionText(mode, hovered, activeChambers);
-  const visible = !!hovered || mode !== "idle";
+function HoverCaption({ mode, hovered, activeChambers, demoActiveId }) {
+  const text = captionText(mode, hovered, activeChambers, demoActiveId);
+  const visible = !!hovered || mode !== "idle" || !!demoActiveId;
   return (
     <div
-      className="absolute -bottom-12 left-0 right-0 text-center smallcaps text-ash transition-opacity duration-300"
-      style={{ opacity: visible ? 1 : 0.45 }}
+      className="absolute -bottom-12 left-0 right-0 text-center smallcaps text-ash transition-opacity duration-500"
+      style={{ opacity: visible ? 0.85 : 0 }}
       data-testid="cortex-hover-caption"
     >
       {text}
@@ -402,7 +429,7 @@ function HoverCaption({ mode, hovered, activeChambers }) {
   );
 }
 
-function captionText(mode, hovered, activeChambers) {
+function captionText(mode, hovered, activeChambers, demoActiveId) {
   if (hovered) {
     const t = CHAMBER_THEME[hovered];
     return `${t.name} — ${t.description}`;
@@ -415,5 +442,9 @@ function captionText(mode, hovered, activeChambers) {
   if (mode === "verdict" && activeChambers.length > 0) {
     return `Chaired by ${CHAMBER_THEME[activeChambers[0]].name}`;
   }
-  return "Hover a region. Click to descend.";
+  if (demoActiveId) {
+    const t = CHAMBER_THEME[demoActiveId];
+    return `${t.name} — ${t.description}`;
+  }
+  return "";
 }
