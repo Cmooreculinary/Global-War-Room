@@ -3,8 +3,10 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 
 import "@/App.css";
+import SplashLanding from "@/pages/SplashLanding";
 import Landing from "@/pages/Landing";
 import ChamberPage from "@/pages/ChamberPage";
+import CourtPage from "@/pages/CourtPage";
 import ForgePage from "@/pages/ForgePage";
 import VerdictPage from "@/pages/VerdictPage";
 import ArchivePage from "@/pages/ArchivePage";
@@ -29,7 +31,9 @@ function App() {
           }}
         />
         <Routes>
-          <Route path="/" element={<Landing />} />
+          <Route path="/" element={<SplashLanding />} />
+          <Route path="/cortex" element={<Landing />} />
+          <Route path="/court/:sessionId" element={<CourtPage />} />
           <Route path="/forge" element={<ForgePage />} />
           <Route path="/chamber/:id" element={<ChamberPage />} />
           <Route path="/chamber/forge" element={<Navigate to="/forge" replace />} />

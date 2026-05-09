@@ -9,7 +9,7 @@
 // All on /. No chamber selection — the model picks.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import Layout from "@/components/Layout";
@@ -19,7 +19,7 @@ import MicButton from "@/components/MicButton";
 import VerdictAudio from "@/components/VerdictAudio";
 import { CHAMBER_THEME } from "@/lib/chambers";
 import { CONVENING_MESSAGES, getChamberMessages } from "@/lib/loadingMessages";
-import { deliberate, fetchChamber, routeQuestion, saveVerdict } from "@/lib/api";
+import { deliberate, fetchChamber, routeQuestion, saveVerdict, createCourtSession } from "@/lib/api";
 
 const PHASES = {
   IDLE: "idle",
@@ -47,7 +47,9 @@ export default function Landing() {
   const [chamberInfo, setChamberInfo] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
+  const [conveningCourt, setConveningCourt] = useState(false);
   const verdictRef = useRef(null);
+  const navigate = useNavigate();
 
   const onConvene = async () => {
     const q = question.trim();
@@ -118,6 +120,19 @@ export default function Landing() {
       toast.success("Verdict link copied.");
     } catch {
       toast.message(url);
+    }
+  };
+
+  const onConveneCourt = async () => {
+    const q = question.trim();
+    if (!q || conveningCourt) return;
+    setConveningCourt(true);
+    try {
+      const { session_id } = await createCourtSession({ question: q, hostName: "Host" });
+      navigate(`/court/${session_id}`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not open the court.");
+      setConveningCourt(false);
     }
   };
 
@@ -236,6 +251,8 @@ export default function Landing() {
                   question={question}
                   onChange={setQuestion}
                   onConvene={onConvene}
+                  onConveneCourt={onConveneCourt}
+                  conveningCourt={conveningCourt}
                   error={errorMsg}
                 />
               </div>
@@ -338,7 +355,7 @@ export default function Landing() {
 // Sub-components                                                              //
 // --------------------------------------------------------------------------- //
 
-function ContextWindow({ question, onChange, onConvene, error }) {
+function ContextWindow({ question, onChange, onConvene, onConveneCourt, conveningCourt, error }) {
   const onKeyDown = (e) => {
     // Cmd/Ctrl + Enter submits
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -413,6 +430,20 @@ function ContextWindow({ question, onChange, onConvene, error }) {
         </button>
         <span className="smallcaps text-ash">⌘ + ⏎</span>
       </div>
+
+      {onConveneCourt && (
+        <div className="mt-4 text-center">
+          <button
+            onClick={onConveneCourt}
+            disabled={!question.trim() || conveningCourt}
+            className="smallcaps inline-block border-b border-transparent pb-0.5 text-ash transition-colors hover:border-bone/40 hover:text-bone disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ letterSpacing: "0.18em" }}
+            data-testid="convene-court-button"
+          >
+            {conveningCourt ? "Opening the court…" : "Or convene a court — invite witnesses →"}
+          </button>
+        </div>
+      )}
 
       {error && (
         <p className="cortex-editorial mt-6 text-center text-sm" style={{ color: "#E89A9A" }} data-testid="landing-error">
