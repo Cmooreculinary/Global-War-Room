@@ -43,6 +43,7 @@ export const Layout = ({ children, accentChamber = null }) => {
             <NavLink to="/receipts" label="Receipts" current={location.pathname.startsWith("/receipts")} testid="nav-receipts" />
             <NavLink to="/archive" label="Archive" current={location.pathname.startsWith("/archive")} testid="nav-archive" />
             <NavLink to="/about" label="About" current={location.pathname.startsWith("/about")} testid="nav-about" />
+            <NavLink to="/pricing" label="Membership" current={location.pathname.startsWith("/pricing") || location.pathname.startsWith("/billing")} testid="nav-pricing" />
           </nav>
         </div>
       </header>

@@ -465,29 +465,36 @@ function SessionStage({ session, isHost, mySeat, lastVerdictRef, onBegin, onObje
 function BeforeConvening({ session, isHost, mySeat, onBegin }) {
   const t = CHAMBER_THEME[session.chamber_id] || CHAMBER_THEME.senate;
   const shareUrl = `${window.location.origin}/court/${session.id}`;
-  const copyShare = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success("Share link copied — invite your witnesses.");
-    } catch {
-      toast.message(shareUrl);
-    }
-  };
+  const hostName =
+    session.attendees?.find((a) => a.is_host)?.name || mySeat?.name || "A friend";
+  const chamberName = t.name;
+
+  const defaultMessage = buildInviteMessage({
+    hostName,
+    chamberName,
+    question: session.question,
+    shareUrl,
+  });
+
   return (
-    <div className="mx-auto mt-4 max-w-2xl text-center" data-testid="court-before-convening">
-      <p className="cortex-editorial text-bone/80 italic">
+    <div className="mx-auto mt-4 max-w-2xl" data-testid="court-before-convening">
+      <p className="cortex-editorial text-center text-bone/80 italic">
         The bench is seated. Witnesses are arriving in the gallery.
-        {isHost ? " When you are ready, convene the court." : " The host will convene shortly."}
+        {isHost
+          ? " When you are ready, convene the court."
+          : " The host will convene shortly."}
       </p>
+
+      {isHost && (
+        <InvitePanel
+          theme={t}
+          shareUrl={shareUrl}
+          defaultMessage={defaultMessage}
+          chamberName={chamberName}
+        />
+      )}
+
       <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-        <button
-          onClick={copyShare}
-          className="cortex-ui inline-flex items-center gap-2 border px-5 py-2.5 text-sm text-bone hover:bg-carbon/40 transition-colors"
-          style={{ borderColor: t.accent, borderRadius: 2 }}
-          data-testid="court-share-button"
-        >
-          Copy invitation link
-        </button>
         {isHost && mySeat && (
           <button
             onClick={onBegin}
@@ -505,6 +512,138 @@ function BeforeConvening({ session, isHost, mySeat, onBegin }) {
         )}
       </div>
     </div>
+  );
+}
+
+function buildInviteMessage({ hostName, chamberName, question, shareUrl }) {
+  return (
+    `${hostName} has convened ${chamberName} on a matter that demands more than one mind:\n\n` +
+    `   "${question}"\n\n` +
+    `The bench will deliberate — Lincoln, Aurelius, Buffett, or whoever the matter calls for. ` +
+    `As a witness in the gallery, you'll see every word on the record. ` +
+    `Before the verdict stands, the bailiff will ask if anyone objects — and you may approach the bench.\n\n` +
+    `Take your seat: ${shareUrl}\n\n` +
+    `— sent from Cerebral Cortex`
+  );
+}
+
+function InvitePanel({ theme, shareUrl, defaultMessage, chamberName }) {
+  const [message, setMessage] = useState(defaultMessage);
+  const [copied, setCopied] = useState(false);
+
+  // Reset message if the chamber/question changes upstream
+  useEffect(() => {
+    setMessage(defaultMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultMessage]);
+
+  const copyAll = async () => {
+    try {
+      await navigator.clipboard.writeText(message);
+      setCopied(true);
+      toast.success("Invitation copied — paste it anywhere.");
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      toast.message(message);
+    }
+  };
+
+  const copyLinkOnly = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success("Just the link — copied.");
+    } catch {
+      toast.message(shareUrl);
+    }
+  };
+
+  const subject = `${chamberName} has been convened`;
+  const mailHref = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
+  const smsHref = `sms:?&body=${encodeURIComponent(message)}`;
+
+  const nativeShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: subject, text: message, url: shareUrl });
+      } catch {
+        // user cancelled
+      }
+    } else {
+      copyAll();
+    }
+  };
+
+  return (
+    <section
+      className="mx-auto mt-10 max-w-2xl border bg-carbon/70 p-6"
+      style={{ borderColor: theme.accent + "55", borderRadius: 2 }}
+      data-testid="invite-panel"
+    >
+      <p className="smallcaps" style={{ color: theme.accent }}>
+        The invitation
+      </p>
+      <p className="cortex-display italic mt-1 text-xl text-pearl">
+        Summon your witnesses.
+      </p>
+      <p className="cortex-editorial mt-2 text-sm text-bone/70">
+        Edit the message if you wish, then send it however you like.
+      </p>
+
+      <textarea
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        rows={9}
+        className="mt-5 block w-full resize-y border bg-transparent px-5 py-4 text-bone placeholder:text-ash cortex-editorial text-[0.98rem] leading-relaxed focus:outline-none"
+        style={{ borderColor: theme.accent + "55", borderRadius: 2 }}
+        data-testid="invite-message"
+      />
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          onClick={copyAll}
+          className="cortex-ui inline-flex items-center gap-2 border px-5 py-2.5 text-sm transition-colors"
+          style={{
+            borderColor: theme.accent,
+            color: "#F5F2EC",
+            background: `${theme.primary}26`,
+            borderRadius: 2,
+          }}
+          data-testid="invite-copy-message"
+        >
+          {copied ? "Copied" : "Copy invitation"}
+        </button>
+        <a
+          href={mailHref}
+          className="cortex-ui inline-flex items-center gap-2 border border-slate px-5 py-2.5 text-sm text-bone hover:border-bone/40 transition-colors"
+          data-testid="invite-email"
+        >
+          Email
+        </a>
+        <a
+          href={smsHref}
+          className="cortex-ui inline-flex items-center gap-2 border border-slate px-5 py-2.5 text-sm text-bone hover:border-bone/40 transition-colors"
+          data-testid="invite-sms"
+        >
+          Text message
+        </a>
+        <button
+          type="button"
+          onClick={nativeShare}
+          className="cortex-ui inline-flex items-center gap-2 border border-slate px-5 py-2.5 text-sm text-bone hover:border-bone/40 transition-colors"
+          data-testid="invite-share"
+        >
+          Share…
+        </button>
+        <button
+          type="button"
+          onClick={copyLinkOnly}
+          className="smallcaps text-ash hover:text-bone transition-colors"
+          data-testid="invite-link-only"
+        >
+          Just the link
+        </button>
+      </div>
+    </section>
   );
 }
 

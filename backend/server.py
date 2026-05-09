@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, BackgroundTasks, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, ConfigDict, Field
@@ -24,6 +24,13 @@ from court_service import (  # noqa: E402
     public_session,
     route_and_panel,
     run_deliberation,
+)
+from billing import (  # noqa: E402
+    FREE_VERDICT_LIMIT,
+    PLANS,
+    create_membership_checkout,
+    get_plan,
+    stripe_client,
 )
 from personas import CHAMBERS, RECONSTRUCTION_DISCLAIMER  # noqa: E402
 
@@ -156,6 +163,23 @@ class CourtObjectRequest(BaseModel):
     content: str
 
 
+# ---- Billing models ------------------------------------------------------ #
+
+class CheckoutCreateRequest(BaseModel):
+    plan_id: str
+    archive_id: str
+    origin_url: str
+
+
+class EntitlementResponse(BaseModel):
+    archive_id: str
+    is_member: bool
+    free_used: int
+    free_limit: int
+    free_remaining: int
+    plan_id: Optional[str] = None
+
+
 # --------------------------------------------------------------------------- #
 # Routes                                                                      #
 # --------------------------------------------------------------------------- #
@@ -235,6 +259,20 @@ async def deliberate(req: DeliberateRequest):
         raise HTTPException(status_code=400, detail="Question is required")
     if req.chamber_id not in CHAMBERS:
         raise HTTPException(status_code=404, detail="Chamber not found")
+
+    # Paywall gate: enforce only when archive_id present (browser-bound user)
+    if req.archive_id:
+        is_member, _ = await _is_active_member(req.archive_id)
+        if not is_member:
+            used = await _free_verdicts_used(req.archive_id)
+            if used >= FREE_VERDICT_LIMIT:
+                raise HTTPException(
+                    status_code=402,
+                    detail=(
+                        "You've used your 5 free verdicts. "
+                        "Become a member at /pricing to keep convening."
+                    ),
+                )
 
     try:
         if req.chamber_id == "forge":
@@ -318,6 +356,186 @@ async def list_archive(archive_id: str = Query(...)):
             doc["created_at"] = datetime.fromisoformat(doc["created_at"])
         out.append(Verdict(**doc))
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Billing — Stripe membership ($10/month, 5 free verdicts before paywall)     #
+# --------------------------------------------------------------------------- #
+
+async def _is_active_member(archive_id: Optional[str]) -> tuple[bool, Optional[str]]:
+    """Return (is_member, plan_id) for the given archive_id."""
+    if not archive_id:
+        return False, None
+    sub = await db.subscriptions.find_one(
+        {"archive_id": archive_id, "status": "active"}, {"_id": 0}
+    )
+    if not sub:
+        return False, None
+    return True, sub.get("plan_id")
+
+
+async def _free_verdicts_used(archive_id: Optional[str]) -> int:
+    if not archive_id:
+        return 0
+    return await db.verdicts.count_documents({"archive_id": archive_id})
+
+
+async def _entitlement(archive_id: Optional[str]) -> EntitlementResponse:
+    is_member, plan_id = await _is_active_member(archive_id)
+    used = await _free_verdicts_used(archive_id)
+    remaining = max(0, FREE_VERDICT_LIMIT - used) if not is_member else 9999
+    return EntitlementResponse(
+        archive_id=archive_id or "",
+        is_member=is_member,
+        free_used=used,
+        free_limit=FREE_VERDICT_LIMIT,
+        free_remaining=remaining,
+        plan_id=plan_id,
+    )
+
+
+@api_router.get("/billing/plans")
+async def list_plans():
+    return {"plans": list(PLANS.values()), "free_limit": FREE_VERDICT_LIMIT}
+
+
+@api_router.get("/billing/me", response_model=EntitlementResponse)
+async def billing_me(archive_id: str = Query(...)):
+    return await _entitlement(archive_id)
+
+
+@api_router.post("/billing/checkout")
+async def billing_checkout(req: CheckoutCreateRequest, http_request: Request):
+    if get_plan(req.plan_id) is None:
+        raise HTTPException(status_code=400, detail="Unknown plan")
+    host_url = str(http_request.base_url).rstrip("/")
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    try:
+        session = await create_membership_checkout(
+            plan_id=req.plan_id,
+            archive_id=req.archive_id,
+            origin_url=req.origin_url.rstrip("/"),
+            webhook_url=webhook_url,
+        )
+    except Exception as e:
+        logger.exception("Stripe checkout creation failed")
+        raise HTTPException(status_code=502, detail="Could not start checkout") from e
+
+    plan = get_plan(req.plan_id)
+    await db.payment_transactions.insert_one({
+        "session_id": session.session_id,
+        "archive_id": req.archive_id,
+        "plan_id": req.plan_id,
+        "amount": plan["price_usd"],
+        "currency": plan["currency"],
+        "payment_status": "initiated",
+        "status": "open",
+        "metadata": {"plan_id": req.plan_id, "archive_id": req.archive_id},
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"url": session.url, "session_id": session.session_id}
+
+
+@api_router.get("/billing/status/{session_id}")
+async def billing_status(session_id: str, http_request: Request):
+    """Poll Stripe for session status; on first paid hit, activate the membership."""
+    txn = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+    if not txn:
+        raise HTTPException(status_code=404, detail="Unknown checkout session")
+
+    host_url = str(http_request.base_url).rstrip("/")
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    sc = stripe_client(webhook_url)
+    try:
+        status = await sc.get_checkout_status(session_id)
+    except Exception as e:
+        logger.exception("Stripe status check failed")
+        raise HTTPException(status_code=502, detail="Could not check checkout status") from e
+
+    # Update payment_transactions row exactly once on terminal paid state.
+    new_payment_status = status.payment_status
+    new_status = status.status
+    already_paid = txn.get("payment_status") == "paid"
+    await db.payment_transactions.update_one(
+        {"session_id": session_id},
+        {"$set": {
+            "payment_status": new_payment_status,
+            "status": new_status,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+
+    # Activate membership idempotently.
+    if new_payment_status == "paid" and not already_paid:
+        archive_id = txn.get("archive_id") or status.metadata.get("archive_id")
+        plan_id = txn.get("plan_id") or status.metadata.get("plan_id")
+        if archive_id and plan_id:
+            await db.subscriptions.update_one(
+                {"archive_id": archive_id},
+                {"$set": {
+                    "archive_id": archive_id,
+                    "plan_id": plan_id,
+                    "status": "active",
+                    "stripe_session_id": session_id,
+                    "activated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+                upsert=True,
+            )
+
+    return {
+        "session_id": session_id,
+        "status": new_status,
+        "payment_status": new_payment_status,
+        "amount_total": status.amount_total,
+        "currency": status.currency,
+        "metadata": status.metadata,
+    }
+
+
+@api_router.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    body = await request.body()
+    sig = request.headers.get("Stripe-Signature", "")
+    host_url = str(request.base_url).rstrip("/")
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    sc = stripe_client(webhook_url)
+    try:
+        event = await sc.handle_webhook(body, sig)
+    except Exception as e:
+        logger.exception("Stripe webhook verification failed")
+        raise HTTPException(status_code=400, detail="Invalid webhook") from e
+
+    session_id = event.session_id
+    if not session_id:
+        return {"ok": True}
+
+    txn = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+    already_paid = bool(txn and txn.get("payment_status") == "paid")
+    await db.payment_transactions.update_one(
+        {"session_id": session_id},
+        {"$set": {
+            "payment_status": event.payment_status,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "last_event": event.event_type,
+        }},
+    )
+    if event.payment_status == "paid" and not already_paid:
+        archive_id = (event.metadata or {}).get("archive_id") or (txn or {}).get("archive_id")
+        plan_id = (event.metadata or {}).get("plan_id") or (txn or {}).get("plan_id")
+        if archive_id and plan_id:
+            await db.subscriptions.update_one(
+                {"archive_id": archive_id},
+                {"$set": {
+                    "archive_id": archive_id,
+                    "plan_id": plan_id,
+                    "status": "active",
+                    "stripe_session_id": session_id,
+                    "activated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+                upsert=True,
+            )
+    return {"ok": True}
 
 
 # --------------------------------------------------------------------------- #

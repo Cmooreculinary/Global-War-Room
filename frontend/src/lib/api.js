@@ -118,3 +118,31 @@ export async function closeCourt(sessionId, attendeeId) {
   const { data } = await http.post(`/court/${sessionId}/close`, { attendee_id: attendeeId });
   return data;
 }
+
+// ---- Billing API --------------------------------------------------------- //
+
+export async function fetchPlans() {
+  const { data } = await http.get(`/billing/plans`);
+  return data; // { plans, free_limit }
+}
+
+export async function fetchEntitlement() {
+  const { data } = await http.get(`/billing/me`, {
+    params: { archive_id: getArchiveId() },
+  });
+  return data;
+}
+
+export async function startCheckout(planId) {
+  const { data } = await http.post(`/billing/checkout`, {
+    plan_id: planId,
+    archive_id: getArchiveId(),
+    origin_url: window.location.origin,
+  });
+  return data; // { url, session_id }
+}
+
+export async function getCheckoutStatus(sessionId) {
+  const { data } = await http.get(`/billing/status/${sessionId}`);
+  return data;
+}
