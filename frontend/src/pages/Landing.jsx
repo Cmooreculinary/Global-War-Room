@@ -19,7 +19,8 @@ import MicButton from "@/components/MicButton";
 import VerdictAudio from "@/components/VerdictAudio";
 import { CHAMBER_THEME } from "@/lib/chambers";
 import { CONVENING_MESSAGES, getChamberMessages } from "@/lib/loadingMessages";
-import { deliberate, fetchChamber, routeQuestion, saveVerdict, createCourtSession } from "@/lib/api";
+import { deliberate, fetchChamber, routeQuestion, saveVerdict, createCourtSession, fetchEntitlement } from "@/lib/api";
+import PaywallModal from "@/components/PaywallModal";
 
 const PHASES = {
   IDLE: "idle",
@@ -48,8 +49,34 @@ export default function Landing() {
   const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
   const [conveningCourt, setConveningCourt] = useState(false);
+  const [entitlement, setEntitlement] = useState(null);
+  const [paywallOpen, setPaywallOpen] = useState(false);
   const verdictRef = useRef(null);
   const navigate = useNavigate();
+
+  // Pull the user's entitlement (free remaining / member status) on mount.
+  useEffect(() => {
+    let alive = true;
+    fetchEntitlement()
+      .then((e) => {
+        if (alive) setEntitlement(e);
+      })
+      .catch(() => {
+        // non-critical — UI degrades to "no counter shown"
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const refreshEntitlement = async () => {
+    try {
+      const e = await fetchEntitlement();
+      setEntitlement(e);
+    } catch {
+      // ignore
+    }
+  };
 
   const onConvene = async () => {
     const q = question.trim();
@@ -78,7 +105,17 @@ export default function Landing() {
       }
 
       setPhase(PHASES.VERDICT);
+      // Verdict succeeded — refresh the free counter
+      refreshEntitlement();
     } catch (e) {
+      const status = e?.response?.status;
+      if (status === 402) {
+        // Soft paywall: free verdicts exhausted
+        setPhase(PHASES.IDLE);
+        setPaywallOpen(true);
+        refreshEntitlement();
+        return;
+      }
       const msg =
         e?.response?.data?.detail ||
         "The cortex paused. Please try again in a moment.";
@@ -131,7 +168,13 @@ export default function Landing() {
       const { session_id } = await createCourtSession({ question: q, hostName: "Host" });
       navigate(`/court/${session_id}`);
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not open the court.");
+      const status = e?.response?.status;
+      if (status === 402) {
+        setPaywallOpen(true);
+        refreshEntitlement();
+      } else {
+        toast.error(e?.response?.data?.detail || "Could not open the court.");
+      }
       setConveningCourt(false);
     }
   };
@@ -269,6 +312,14 @@ export default function Landing() {
                 </Link>
               </div>
 
+              {/* Free-counter pill / Member badge — subtle, only when we have data */}
+              {entitlement && (
+                <FreeCounterPill
+                  entitlement={entitlement}
+                  onUpgrade={() => navigate("/pricing")}
+                />
+              )}
+
               <div className="hairline mt-14" />
 
               <div className="mt-8 flex flex-wrap items-center justify-center gap-5 text-center">
@@ -347,6 +398,12 @@ export default function Landing() {
           )}
         </AnimatePresence>
       </section>
+
+      <PaywallModal
+        open={paywallOpen}
+        onClose={() => setPaywallOpen(false)}
+        freeLimit={entitlement?.free_limit || 5}
+      />
     </Layout>
   );
 }
@@ -582,4 +639,70 @@ function renderCouncil(verdict, chamberInfo) {
     glyph: glyphFor[cid] || "anvil",
     lineage: `Witness from ${CHAMBER_THEME[cid]?.biology || ""}`,
   }));
+}
+
+function FreeCounterPill({ entitlement, onUpgrade }) {
+  if (entitlement.is_member) {
+    return (
+      <div className="mt-7 text-center" data-testid="member-badge">
+        <span
+          className="smallcaps inline-flex items-center gap-2 border px-3.5 py-1.5"
+          style={{
+            color: "#FFE5B4",
+            borderColor: "#C9A961",
+            background: "rgba(201,169,97,0.10)",
+            letterSpacing: "0.18em",
+            borderRadius: 2,
+          }}
+        >
+          <span
+            aria-hidden
+            className="inline-block h-1.5 w-1.5 rounded-full"
+            style={{
+              background: "#C9A961",
+              boxShadow: "0 0 8px rgba(201,169,97,0.8)",
+            }}
+          />
+          Member — unlimited verdicts
+        </span>
+      </div>
+    );
+  }
+
+  const remaining = entitlement.free_remaining ?? 0;
+  const limit = entitlement.free_limit ?? 5;
+  const dimming = remaining <= 1;
+
+  return (
+    <div className="mt-7 text-center" data-testid="free-counter-pill">
+      <button
+        onClick={onUpgrade}
+        className="smallcaps inline-flex items-center gap-2 border px-3.5 py-1.5 transition-colors"
+        style={{
+          color: dimming ? "#FFE5B4" : "#9A9AA8",
+          borderColor: dimming ? "#C9A961" : "#2A2A36",
+          background: dimming ? "rgba(201,169,97,0.10)" : "transparent",
+          letterSpacing: "0.16em",
+          borderRadius: 2,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = "#FFE5B4";
+          e.currentTarget.style.borderColor = "#C9A961";
+        }}
+        onMouseLeave={(e) => {
+          if (!dimming) {
+            e.currentTarget.style.color = "#9A9AA8";
+            e.currentTarget.style.borderColor = "#2A2A36";
+          }
+        }}
+        data-testid="free-counter-pill-btn"
+      >
+        <span className="tabular">
+          {remaining} of {limit}
+        </span>
+        <span className="text-bone/55">verdicts remaining</span>
+        <span aria-hidden style={{ color: "#C9A961" }}>→</span>
+      </button>
+    </div>
+  );
 }

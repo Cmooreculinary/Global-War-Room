@@ -605,6 +605,21 @@ async def court_create(req: CourtCreateRequest):
     q = req.question.strip()
     if not q:
         raise HTTPException(status_code=400, detail="Question is required")
+
+    # Paywall gate (court convening counts the same as solo deliberation)
+    if req.archive_id:
+        is_member, _ = await _is_active_member(req.archive_id)
+        if not is_member:
+            used = await _free_verdicts_used(req.archive_id)
+            if used >= FREE_VERDICT_LIMIT:
+                raise HTTPException(
+                    status_code=402,
+                    detail=(
+                        "You've used your 5 free verdicts. "
+                        "Become a member at /pricing to keep convening."
+                    ),
+                )
+
     routing = await route_and_panel(q)
 
     host_attendee_id = str(uuid.uuid4())
