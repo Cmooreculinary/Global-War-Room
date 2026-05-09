@@ -176,8 +176,8 @@ export default function Landing() {
         className="relative mx-auto max-w-7xl px-6 pb-12 pt-10 md:px-10 md:pb-16 md:pt-16"
         data-testid="landing-hero"
       >
-        {/* Tagline above the brain */}
-        <div className="mb-8 text-center md:mb-10">
+        {/* Tagline above the brain — tightened toward the graphic */}
+        <div className="mb-3 text-center md:mb-4">
           <p className="smallcaps text-ash">A deliberation engine</p>
           <h1
             className="cortex-display mt-2 text-5xl tracking-tight text-pearl md:text-7xl"
@@ -186,7 +186,7 @@ export default function Landing() {
           >
             Cerebral <span className="italic" style={{ color: "#C9A961" }}>Cortex</span>
           </h1>
-          <p className="cortex-display mt-4 text-xl italic text-bone/85 md:text-2xl">
+          <p className="cortex-display mt-3 text-xl italic text-bone/85 md:text-2xl">
             Real wisdom is never one voice.
             <span className="text-bone/60"> It's a whole mind at work.</span>
           </p>
@@ -224,10 +224,22 @@ export default function Landing() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.55 }}
-              className="mx-auto mt-12 max-w-3xl md:mt-16"
+              className="mx-auto mt-8 max-w-3xl md:mt-10"
             >
-              {/* How it works strip — now sits above the input */}
-              <div className="mx-auto grid max-w-2xl grid-cols-1 gap-6 sm:grid-cols-3">
+              {/* Compact context window (half-width, scrollable) — now sits directly under the brain */}
+              <div className="mx-auto w-full max-w-xl">
+                <ContextWindow
+                  question={question}
+                  onChange={setQuestion}
+                  onConvene={onConvene}
+                  onConveneCourt={onConveneCourt}
+                  conveningCourt={conveningCourt}
+                  error={errorMsg}
+                />
+              </div>
+
+              {/* How it works strip — now sits below the input */}
+              <div className="mx-auto mt-12 grid max-w-2xl grid-cols-1 gap-6 sm:grid-cols-3 md:mt-14">
                 {[
                   ["1", "Bring a question.", "The matter you cannot solve alone."],
                   ["2", "The cortex routes.", "The right chamber convenes its council."],
@@ -245,20 +257,8 @@ export default function Landing() {
                 ))}
               </div>
 
-              {/* Compact context window (half-width, scrollable) */}
-              <div className="mx-auto mt-10 w-full max-w-xl md:mt-12">
-                <ContextWindow
-                  question={question}
-                  onChange={setQuestion}
-                  onConvene={onConvene}
-                  onConveneCourt={onConveneCourt}
-                  conveningCourt={conveningCourt}
-                  error={errorMsg}
-                />
-              </div>
-
-              {/* Standalone "Review our Experts" link directly beneath the input */}
-              <div className="mt-8 text-center">
+              {/* Standalone "Review our Experts" link */}
+              <div className="mt-10 text-center">
                 <Link
                   to="/receipts"
                   className="smallcaps inline-block border-b border-transparent pb-0.5 text-ash transition-colors hover:border-bone/40 hover:text-bone"
