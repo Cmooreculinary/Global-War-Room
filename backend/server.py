@@ -32,8 +32,14 @@ from billing import (  # noqa: E402
     get_plan,
     stripe_client,
 )
-from personas import CHAMBERS, RECONSTRUCTION_DISCLAIMER  # noqa: E402
+from personas import CHAMBERS, RECONSTRUCTION_DISCLAIMER, team_ids, war_room_teams  # noqa: E402
 from intel import LIVE_ENABLED, RSS_FEEDS, STATE_FEEDS  # noqa: E402
+from scenario_service import (  # noqa: E402
+    clamp_horizon,
+    run_projections,
+    run_scenario,
+    sanitize_assignments,
+)
 from warroom_service import build_brief, run_war_room  # noqa: E402
 
 mongo_url = os.environ["MONGO_URL"]
@@ -62,6 +68,18 @@ class Source(BaseModel):
     year: Optional[str] = None
 
 
+class Consul(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    name: str
+    dates: Optional[str] = None
+    lineage: str
+    glyph: str
+    chosen_because: str
+    voice_notes: str
+    sources: Optional[List[Source]] = None
+
+
 class CouncilMember(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
@@ -71,6 +89,8 @@ class CouncilMember(BaseModel):
     glyph: str
     voice_notes: str
     sources: Optional[List[Source]] = None
+    # Only the War Room seats consuls; every other chamber leaves this empty.
+    consuls: Optional[List[Consul]] = None
 
 
 class ChamberInfo(BaseModel):
@@ -195,6 +215,57 @@ class WarRoomConveneRequest(BaseModel):
     window_hours: int = Field(default=24, ge=1, le=168)
     include_state: bool = False
     archive_id: Optional[str] = None
+
+
+class TeamAssignment(BaseModel):
+    """One actor and the teams advising it."""
+    actor: str
+    teams: List[str] = Field(default_factory=list)
+
+
+class ProjectionRequest(BaseModel):
+    brief_id: Optional[str] = None
+    topic: Optional[str] = None
+    pasted: str = ""
+    live: bool = True
+    horizon_years: int = Field(default=5, ge=1, le=10)
+    teams: List[str] = Field(default_factory=list)  # empty = every team
+    archive_id: Optional[str] = None
+
+
+class ScenarioRequest(BaseModel):
+    brief_id: Optional[str] = None
+    topic: Optional[str] = None
+    pasted: str = ""
+    live: bool = True
+    horizon_years: int = Field(default=5, ge=1, le=10)
+    assignments: List[TeamAssignment] = Field(default_factory=list)
+    archive_id: Optional[str] = None
+
+
+class RunAccepted(BaseModel):
+    run_id: str
+    kind: str
+    status: str
+
+
+class RunResponse(BaseModel):
+    id: str
+    kind: str
+    status: str
+    topic: str = ""
+    horizon: int = 5
+    progress: Dict[str, Any] = Field(default_factory=dict)
+    brief: Dict[str, Any] = Field(default_factory=dict)
+    assignments: List[Dict[str, Any]] = Field(default_factory=list)
+    projections: List[Dict[str, Any]] = Field(default_factory=list)
+    comparison: Dict[str, Any] = Field(default_factory=dict)
+    opening: List[Dict[str, Any]] = Field(default_factory=list)
+    years: List[Dict[str, Any]] = Field(default_factory=list)
+    debrief: Dict[str, Any] = Field(default_factory=dict)
+    error: str = ""
+    created_at: datetime
+    updated_at: Optional[datetime] = None
 
 
 class WarRoomEstimateResponse(BaseModel):
@@ -745,6 +816,199 @@ async def warroom_convene(req: WarRoomConveneRequest):
         estimate=result["estimate"],
         verdict=result["verdict"],
         created_at=now,
+    )
+
+
+# ---- Team modes: projections and played-out scenarios -------------------- #
+
+async def _resolve_brief(
+    brief_id: Optional[str], topic: Optional[str], pasted: str, live: bool
+) -> dict:
+    """Reuse a brief the user has already reviewed, or build one now."""
+    if brief_id:
+        stored = await db.warroom_briefs.find_one({"id": brief_id}, {"_id": 0})
+        if not stored:
+            raise HTTPException(status_code=404, detail="Brief not found")
+        return {
+            "topic": stored.get("topic", ""),
+            "brief": stored["brief"],
+            "sources": stored.get("sources", {}),
+            "items": stored.get("items", []),
+        }
+    if not (topic or "").strip():
+        raise HTTPException(status_code=400, detail="A topic or a brief_id is required")
+    return await build_brief(topic.strip(), pasted=pasted, live=live)
+
+
+async def _create_run(kind: str, topic: str, horizon: int, brief_doc: dict, **extra) -> dict:
+    now = datetime.now(timezone.utc).isoformat()
+    run = {
+        "id": str(uuid.uuid4()),
+        "kind": kind,
+        "status": "running",
+        "topic": topic,
+        "horizon": horizon,
+        "progress": {"stage": "queued"},
+        "brief": brief_doc["brief"],
+        "sources": brief_doc.get("sources", {}),
+        "assignments": [],
+        "projections": [],
+        "comparison": {},
+        "opening": [],
+        "years": [],
+        "debrief": {},
+        "error": "",
+        "created_at": now,
+        "updated_at": now,
+        **extra,
+    }
+    await db.warroom_runs.insert_one(dict(run))
+    return run
+
+
+async def _patch_run(run_id: str, **fields) -> None:
+    fields["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.warroom_runs.update_one({"id": run_id}, {"$set": fields})
+
+
+def _progress_writer(run_id: str):
+    """Stream stage-by-stage progress into the run document.
+
+    Results are written the moment they land — a year at a time — so a client
+    polling a five-year scenario watches it play rather than staring at a
+    spinner for several minutes.
+    """
+    async def on_progress(**kw):
+        stage = kw.get("stage", "")
+        patch: dict = {"progress": {k: v for k, v in kw.items() if k not in ("opening", "played")}}
+        if stage == "opening_done" and kw.get("opening") is not None:
+            patch["opening"] = kw["opening"]
+        if stage == "year_done" and kw.get("played") is not None:
+            run = await db.warroom_runs.find_one({"id": run_id}, {"_id": 0, "years": 1})
+            patch["years"] = (run or {}).get("years", []) + [kw["played"]]
+        await _patch_run(run_id, **patch)
+
+    return on_progress
+
+
+async def _run_projections_task(run_id: str, brief: dict, horizon: int, teams: list):
+    try:
+        result = await run_projections(
+            brief, horizon=horizon, teams=teams, on_progress=_progress_writer(run_id)
+        )
+        await _patch_run(
+            run_id,
+            status="complete",
+            progress={"stage": "complete"},
+            projections=result["projections"],
+            comparison=result["comparison"],
+        )
+    except Exception as e:
+        logger.exception("Projection run %s failed", run_id)
+        await _patch_run(run_id, status="error", progress={"stage": "error"}, error=str(e)[:300])
+
+
+async def _run_scenario_task(run_id: str, brief: dict, assignments: list, horizon: int):
+    try:
+        result = await run_scenario(
+            brief, assignments, horizon=horizon, on_progress=_progress_writer(run_id)
+        )
+        await _patch_run(
+            run_id,
+            status="complete",
+            progress={"stage": "complete"},
+            assignments=result["assignments"],
+            mode=result["mode"],
+            opening=result["opening"],
+            years=result["years"],
+            debrief=result["debrief"],
+        )
+    except Exception as e:
+        logger.exception("Scenario run %s failed", run_id)
+        await _patch_run(run_id, status="error", progress={"stage": "error"}, error=str(e)[:300])
+
+
+@api_router.get("/warroom/teams")
+async def warroom_teams():
+    """Each commander with the two consuls he would actually seat."""
+    return {"teams": war_room_teams()}
+
+
+@api_router.post("/warroom/projection", status_code=202, response_model=RunAccepted)
+async def warroom_projection(req: ProjectionRequest, background_tasks: BackgroundTasks):
+    """Every team forecasts the horizon; the forecasts are then read against
+    each other. Runs in the background — poll /warroom/run/{id}."""
+    await _enforce_paywall(req.archive_id)
+    brief_doc = await _resolve_brief(req.brief_id, req.topic, req.pasted, req.live)
+    horizon = clamp_horizon(req.horizon_years)
+
+    run = await _create_run(
+        "projection", brief_doc.get("topic", req.topic or ""), horizon, brief_doc,
+        teams=req.teams or team_ids(),
+    )
+    background_tasks.add_task(
+        _run_projections_task, run["id"], brief_doc["brief"], horizon, req.teams
+    )
+    return RunAccepted(run_id=run["id"], kind="projection", status="running")
+
+
+@api_router.post("/warroom/scenario", status_code=202, response_model=RunAccepted)
+async def warroom_scenario(req: ScenarioRequest, background_tasks: BackgroundTasks):
+    """Play the horizon out year by year.
+
+    One actor with every team advising it, or several actors with the teams
+    split between them — the same engine either way.
+    """
+    await _enforce_paywall(req.archive_id)
+
+    assignments = sanitize_assignments([a.model_dump() for a in req.assignments])
+    if not assignments:
+        raise HTTPException(
+            status_code=400,
+            detail="Each actor needs a name and at least one team, and a team can only play one side.",
+        )
+
+    brief_doc = await _resolve_brief(req.brief_id, req.topic, req.pasted, req.live)
+    horizon = clamp_horizon(req.horizon_years)
+
+    run = await _create_run(
+        "scenario", brief_doc.get("topic", req.topic or ""), horizon, brief_doc,
+        assignments=assignments,
+        mode="confrontation" if len(assignments) > 1 else "single_actor",
+    )
+    background_tasks.add_task(
+        _run_scenario_task, run["id"], brief_doc["brief"], assignments, horizon
+    )
+    return RunAccepted(run_id=run["id"], kind="scenario", status="running")
+
+
+@api_router.get("/warroom/run/{run_id}", response_model=RunResponse)
+async def warroom_run(run_id: str):
+    """Poll a projection or scenario run. Partial results are returned as they land."""
+    doc = await db.warroom_runs.find_one({"id": run_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    def when(value):
+        return datetime.fromisoformat(value) if isinstance(value, str) else value
+
+    return RunResponse(
+        id=doc["id"],
+        kind=doc.get("kind", ""),
+        status=doc.get("status", "running"),
+        topic=doc.get("topic", ""),
+        horizon=doc.get("horizon", 5),
+        progress=doc.get("progress") or {},
+        brief=doc.get("brief") or {},
+        assignments=doc.get("assignments") or [],
+        projections=doc.get("projections") or [],
+        comparison=doc.get("comparison") or {},
+        opening=doc.get("opening") or [],
+        years=doc.get("years") or [],
+        debrief=doc.get("debrief") or {},
+        error=doc.get("error", ""),
+        created_at=when(doc.get("created_at")) or datetime.now(timezone.utc),
+        updated_at=when(doc.get("updated_at")),
     )
 
 

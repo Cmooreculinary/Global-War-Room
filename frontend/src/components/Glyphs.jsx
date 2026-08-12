@@ -177,10 +177,19 @@ export const EagleGlyph = (p) => (
   </Wrap>
 );
 
+export const ScrollGlyph = (p) => (
+  <Wrap {...p}>
+    <path d="M8 7 q 0 -3 3 -3 h 13 q -2 2 -2 5 v 14 q 0 3 -3 3 H 8" />
+    <path d="M8 26 q 3 0 3 -3 V 9" />
+    <path d="M14 11 h 6 M14 15 h 6 M14 19 h 4" />
+  </Wrap>
+);
+
 export const GLYPHS = {
   laurel: LaurelGlyph,
   sword: SwordGlyph,
   eagle: EagleGlyph,
+  scroll: ScrollGlyph,
   scales: ScalesGlyph,
   shield: ShieldGlyph,
   compass: CompassGlyph,

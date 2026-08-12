@@ -195,7 +195,106 @@ backend:
           and reused by /deliberate, /court/create and /warroom/convene —
           identical semantics, three call sites collapsed to one.
 
+  - task: "Consuls — two per commander, five teams of three"
+    implemented: true
+    working: "NA"
+    file: "backend/personas.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          Each War Room commander now carries a `consuls` list of two, picked as
+          that leader would pick — mostly his real inner circle, each paired as
+          one operational counterweight plus one political/economic/intelligence
+          brain: Alexander/Parmenion+Aristotle, Genghis/Subutai+Yelü Chucai,
+          Napoleon/Berthier+Talleyrand, Churchill/Alanbrooke+R.V. Jones,
+          Eisenhower/Marshall+Kennan. Every consul has sources and a
+          `chosen_because` explaining the pick. Flows into /personas and the
+          Receipts page; other chambers leave the field empty.
+          NOTE: CouncilMember gained an optional `consuls` field — without it
+          pydantic would have silently dropped them from every response.
+
+  - task: "Projections — one five-year forecast per team, then compared"
+    implemented: true
+    working: "NA"
+    file: "backend/scenario_service.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          One call per team against the shared brief, then a comparison pass
+          that traces divergence to doctrine rather than summarising. A team
+          that fails is dropped and the rest still run; only a total failure
+          raises. Each projection carries internal dissent between the leader
+          and his own consuls.
+
+  - task: "Scenario engine — assignments, year-by-year play, debrief"
+    implemented: true
+    working: "NA"
+    file: "backend/scenario_service.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          One primitive covers every mode the user asked for: a list of actors,
+          each with the teams advising it. Play the US = one actor, five teams.
+          US vs China = two actors, teams split. Anything else = same engine.
+          There is deliberately no US-specific or China-specific code path.
+          Each year is its own model call given everything already played, so
+          the exercise escalates and can surprise; every year forces a cost per
+          move and one unplanned development. A failed year is recorded and
+          play continues rather than voiding the run. Sanitiser refuses to seat
+          one team on two sides — it would be playing itself.
+
+  - task: "Run endpoints with progress streaming"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          GET /api/warroom/teams, POST /api/warroom/projection, POST
+          /api/warroom/scenario (both 202 + run_id, background), GET
+          /api/warroom/run/{id}. Runs are minutes long — a 5-year two-sided
+          scenario is 7 model calls — so each stage writes to db.warroom_runs
+          as it lands and the client polls. Paywalled like every other
+          convening.
+
 frontend:
+  - task: "Team modes UI — builder, projections, scenario timeline"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/ScenarioBuilder.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          Step three on /warroom, available once a brief exists. Presets
+          (Projection / Play the US / Play China / US vs China / Custom) all
+          write the same assignments primitive, and Custom exposes it directly
+          — name any actors, deal the teams out, up to four actors. Selecting a
+          team for one actor removes it from the others, mirroring the server
+          rule. Results stream in: ProjectionView tabs per team, ScenarioView
+          renders turn zero then a year at a time as they land, then the
+          debrief. Polling stops on unmount; the run continues server-side.
+          Verified: `yarn build` clean under CI=true. NOT verified in a browser.
+
   - task: "War Room page and flow"
     implemented: true
     working: "NA"
@@ -242,10 +341,11 @@ metadata:
 
 test_plan:
   current_focus:
+    - "Scenario engine — assignments, year-by-year play, debrief"
+    - "Run endpoints with progress streaming"
+    - "Projections — one five-year forecast per team, then compared"
+    - "Team modes UI — builder, projections, scenario timeline"
     - "Intelligence intake — live pull + paste, with lean labelling"
-    - "Three-pass pipeline — sift, board, estimate"
-    - "War Room endpoints"
-    - "War Room page and flow"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -276,3 +376,35 @@ agent_communication:
       label. Test added. A second bug the tests caught: RDF/RSS-1.0 feeds
       (Deutsche Welle) dropped every item because the title lookup was missing
       the RSS 1.0 namespace.
+
+    -agent: "main"
+    -message: |
+      Second pass: consuls, projections and playable scenarios.
+
+      Test suites now:
+        backend/tests/test_warroom_units.py     — 30 units
+        backend/tests/test_intel_parsing.py     — 11 parsing, MockTransport
+        backend/tests/test_scenarios_units.py   — 33 units (teams, assignments,
+                                                  projections, scenario play)
+        backend/tests/test_warroom_backend.py   — integration, slow
+        backend/tests/test_scenarios_backend.py — integration, slow
+
+      `cd backend && pytest -m "not slow"` — 74 passing locally, no network or
+      model needed.
+
+      Priorities for a live pass, in order:
+      1. A two-sided scenario end to end. Three years, Country A vs Country B,
+         and read whether the years actually escalate or just restate. The
+         year-by-year call chain is the part most likely to drift.
+      2. Whether the five projections genuinely differ. There is a test
+         asserting the trajectories are not string-identical, but the real
+         question is qualitative — if Genghis and Eisenhower forecast the same
+         world, the personas are too weak and the prompts need sharpening.
+      3. The scenario UI mid-run, watching years land one at a time.
+
+      Cost note: a 5-year two-actor scenario is 7 model calls at up to 4000
+      output tokens. The horizon selector goes to 10, which would be 12 calls.
+      Worth watching before this is priced.
+
+      Still unverified from the first pass: live news fetching (sandbox proxy
+      403s every news host) and any browser rendering.

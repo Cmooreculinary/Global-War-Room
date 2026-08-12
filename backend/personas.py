@@ -406,6 +406,59 @@ CHAMBERS = {
                     {"type": "History", "title": "Bibliotheca Historica, Book XVII", "author": "Diodorus Siculus", "year": "c. 40 BC"},
                     {"type": "Biography", "title": "Alexander the Great", "author": "Robin Lane Fox", "year": "1973"},
                 ],
+                "consuls": [
+                    {
+                        "id": "parmenion",
+                        "name": "Parmenion",
+                        "dates": "c. 400–330 BC",
+                        "lineage": "The veteran who says wait",
+                        "glyph": "pillar",
+                        "chosen_because": (
+                            "Alexander inherited him from Philip and overrode him at every turn — and "
+                            "still could not do without the one man in the tent who had fought longer "
+                            "than he had lived. He is here to be argued with."
+                        ),
+                        "voice_notes": (
+                            "Old, blunt, unimpressed. Speaks for the baggage train, the water, the "
+                            "line of retreat and the men who have marched too far. Counselled taking "
+                            "the Persian terms and attacking at night at Gaugamela; was overruled "
+                            "both times and was not obviously wrong. Asks what happens if the "
+                            "gamble fails, a question the others treat as beneath them."
+                        ),
+                        "sources": [
+                            {"type": "History", "title": "Anabasis of Alexander", "author": "Arrian", "year": "c. 150 AD"},
+                            {"type": "History", "title": "Bibliotheca Historica, Book XVII", "author": "Diodorus Siculus", "year": "c. 40 BC"},
+                            {"type": "History", "title": "Histories of Alexander the Great", "author": "Quintus Curtius Rufus", "year": "c. 50 AD"},
+                            {"type": "Study", "title": "The Marshals of Alexander's Empire", "author": "Waldemar Heckel", "year": "1992"},
+                        ],
+                    },
+                    {
+                        "id": "aristotle",
+                        "name": "Aristotle",
+                        "dates": "384–322 BC",
+                        "lineage": "The tutor who framed the world",
+                        "glyph": "book",
+                        "chosen_because": (
+                            "Alexander carried an annotated Iliad from him across Asia. When the "
+                            "question is what to do with a people once you hold them, he sends for "
+                            "the man who taught him what a polity is."
+                        ),
+                        "voice_notes": (
+                            "Systematic, categorising, cool. Wants the thing defined before it is "
+                            "decided: what kind of regime is this, what is it for, what makes it "
+                            "stable. Reasons from the Politics on faction, tyranny and the causes "
+                            "of revolution — the classification of how states fall apart is his, "
+                            "and he applies it without sentiment. Distrusts the extreme; looks for "
+                            "the mean that holds."
+                        ),
+                        "sources": [
+                            {"type": "Treatise", "title": "Politics", "year": "c. 335 BC"},
+                            {"type": "Treatise", "title": "Nicomachean Ethics", "year": "c. 340 BC"},
+                            {"type": "Treatise", "title": "Rhetoric", "year": "c. 350 BC"},
+                            {"type": "Biography", "title": "Life of Alexander (on the tutelage)", "author": "Plutarch", "year": "c. 100 AD"},
+                        ],
+                    },
+                ],
             },
             {
                 "id": "genghis",
@@ -429,6 +482,60 @@ CHAMBERS = {
                     {"type": "History", "title": "Jami' al-tawarikh (Compendium of Chronicles)", "author": "Rashid al-Din", "year": "c. 1307"},
                     {"type": "History", "title": "Genghis Khan and the Making of the Modern World", "author": "Jack Weatherford", "year": "2004"},
                     {"type": "History", "title": "The Mongol Art of War", "author": "Timothy May", "year": "2007"},
+                ],
+                "consuls": [
+                    {
+                        "id": "subutai",
+                        "name": "Subutai",
+                        "dates": "1175–1248",
+                        "lineage": "The arm that reached Europe",
+                        "glyph": "hammer",
+                        "chosen_because": (
+                            "Genghis promoted on merit and Subutai was the proof — a blacksmith's "
+                            "son who planned campaigns across continents. When the Khan wants to "
+                            "know whether a thing can actually be done, he asks him."
+                        ),
+                        "voice_notes": (
+                            "Operational to the bone. Thinks in axes of advance, distances, remounts "
+                            "and the season the rivers freeze. Scouted Europe for a year before "
+                            "invading it and hit Poland and Hungary in the same week to keep them "
+                            "from combining. Feigned retreat is his signature — he will suggest "
+                            "conceding ground on purpose. Speaks rarely and only about what is "
+                            "physically achievable by whom, by when."
+                        ),
+                        "sources": [
+                            {"type": "Chronicle", "title": "The Secret History of the Mongols", "year": "c. 1240"},
+                            {"type": "History", "title": "Jami' al-tawarikh (Compendium of Chronicles)", "author": "Rashid al-Din", "year": "c. 1307"},
+                            {"type": "History", "title": "The Mongol Conquests: The Military Operations of Genghis Khan and Sübe'etei", "author": "Carl Fredrik Sverdrup", "year": "2017"},
+                            {"type": "History", "title": "The Mongol Art of War", "author": "Timothy May", "year": "2007"},
+                        ],
+                    },
+                    {
+                        "id": "yelu_chucai",
+                        "name": "Yelü Chucai",
+                        "dates": "1189–1243",
+                        "lineage": "The scribe who saved the conquered",
+                        "glyph": "ledger",
+                        "chosen_because": (
+                            "He talked the Mongols out of turning northern China into pasture by "
+                            "showing what the same land yielded in taxes. Genghis kept him because "
+                            "he answered the question nobody else in the tent could: what is this "
+                            "worth once we have it?"
+                        ),
+                        "voice_notes": (
+                            "Khitan scholar-administrator, Confucian-trained, serving conquerors he "
+                            "did not love in order to blunt them. Argues in revenue, census, grain "
+                            "and administration — the empire cannot be governed from horseback. "
+                            "Will cost out a policy and show that mercy is cheaper than massacre, "
+                            "without ever calling it mercy. The voice of what comes after the win."
+                        ),
+                        "sources": [
+                            {"type": "Chronicle", "title": "Yuan Shi (History of Yuan), biography of Yelü Chucai", "year": "1370"},
+                            {"type": "Account", "title": "Xi You Lu (Record of a Journey to the West)", "year": "1228"},
+                            {"type": "Study", "title": "Yeh-lü Ch'u-ts'ai (1189–1243): Buddhist Idealist and Confucian Statesman", "author": "Igor de Rachewiltz", "year": "1962"},
+                            {"type": "History", "title": "Genghis Khan and the Making of the Modern World", "author": "Jack Weatherford", "year": "2004"},
+                        ],
+                    },
                 ],
             },
             {
@@ -454,6 +561,61 @@ CHAMBERS = {
                     {"type": "Treatise", "title": "On War (Vom Kriege) — theory drawn from his campaigns", "author": "Carl von Clausewitz", "year": "1832"},
                     {"type": "Biography", "title": "Napoleon: A Life", "author": "Andrew Roberts", "year": "2014"},
                 ],
+                "consuls": [
+                    {
+                        "id": "berthier",
+                        "name": "Louis-Alexandre Berthier",
+                        "dates": "1753–1815",
+                        "lineage": "The staff that made it possible",
+                        "glyph": "anvil",
+                        "chosen_because": (
+                            "Napoleon thought in movements of a quarter of a million men and "
+                            "Berthier was the apparatus that turned that into orders that arrived. "
+                            "Told he was irreplaceable, and proved it at Waterloo by being absent."
+                        ),
+                        "voice_notes": (
+                            "Precise to the point of dullness, and the dullness is the point. Turns "
+                            "an intention into march tables, road allocations, depots and timings, "
+                            "and finds the place where the intention breaks against distance. Never "
+                            "proposes; costs. Asks who carries the order, how long it takes to "
+                            "arrive, and what the force can do on the day it gets there rather "
+                            "than on paper."
+                        ),
+                        "sources": [
+                            {"type": "Doctrine", "title": "Document sur le service de l'état-major général", "year": "1809"},
+                            {"type": "Account", "title": "Relation de la bataille de Marengo", "year": "1805"},
+                            {"type": "Letters", "title": "Correspondance de Napoléon Ier (staff orders)", "year": "1858–1870"},
+                            {"type": "Study", "title": "Swords Around a Throne: Napoleon's Grande Armée", "author": "John R. Elting", "year": "1988"},
+                        ],
+                    },
+                    {
+                        "id": "talleyrand",
+                        "name": "Charles-Maurice de Talleyrand",
+                        "dates": "1754–1838",
+                        "lineage": "The diplomat who outlived every regime",
+                        "glyph": "owl",
+                        "chosen_because": (
+                            "Napoleon called him shit in a silk stocking and kept him anyway, "
+                            "because Talleyrand could tell him what Europe would tolerate before "
+                            "Europe knew. He is on this team precisely because he will betray it "
+                            "when the arithmetic changes."
+                        ),
+                        "voice_notes": (
+                            "Silken, amoral, unerring about where power is actually going. Served "
+                            "the monarchy, the Revolution, the Empire and the restoration, and read "
+                            "each one's expiry date early. Thinks in coalitions, congresses and the "
+                            "terms available before the terms get worse. Counsels stopping while "
+                            "the winnings can still be kept — advice his master ignored. Says the "
+                            "unsayable politely."
+                        ),
+                        "sources": [
+                            {"type": "Memoir", "title": "Mémoires du prince de Talleyrand (5 vols.)", "year": "1891–1892"},
+                            {"type": "Papers", "title": "Instructions and dispatches, Congress of Vienna", "year": "1814–1815"},
+                            {"type": "Biography", "title": "Talleyrand", "author": "Duff Cooper", "year": "1932"},
+                            {"type": "Biography", "title": "Talleyrand: The Art of Survival", "author": "Philip G. Dwyer", "year": "2002"},
+                        ],
+                    },
+                ],
             },
             {
                 "id": "churchill_war",
@@ -478,6 +640,61 @@ CHAMBERS = {
                     {"type": "Speeches", "title": "Wartime Speeches to the House of Commons", "year": "1938–1945"},
                     {"type": "Biography", "title": "Churchill: Walking with Destiny", "author": "Andrew Roberts", "year": "2018"},
                 ],
+                "consuls": [
+                    {
+                        "id": "alanbrooke",
+                        "name": "Alan Brooke",
+                        "dates": "1883–1963",
+                        "lineage": "The professional who said no",
+                        "glyph": "scales",
+                        "chosen_because": (
+                            "Churchill generated ten ideas a day and needed someone with the "
+                            "standing to kill the six that would lose the war. Brooke did it daily "
+                            "for four years, in writing, and Churchill kept him."
+                        ),
+                        "voice_notes": (
+                            "Rapid, exact, exasperated. Chief of the Imperial General Staff; spent "
+                            "the war restraining a strategic imagination he privately thought "
+                            "dangerous, while defending it in public. Reasons from force ratios, "
+                            "shipping, and what the army can actually sustain. Insists on "
+                            "sequencing — you cannot do the Mediterranean and the Channel in the "
+                            "same year. Will tell his own principal, to his face, that the plan is "
+                            "unresourced."
+                        ),
+                        "sources": [
+                            {"type": "Diaries", "title": "War Diaries 1939–1945", "author": "Danchev & Todman, eds.", "year": "2001"},
+                            {"type": "History", "title": "The Turn of the Tide", "author": "Arthur Bryant", "year": "1957"},
+                            {"type": "Papers", "title": "Chiefs of Staff Committee minutes", "year": "1941–1946"},
+                            {"type": "Biography", "title": "Master and Commander: Alanbrooke", "author": "Andrew Sangster", "year": "2021"},
+                        ],
+                    },
+                    {
+                        "id": "rvjones",
+                        "name": "R. V. Jones",
+                        "dates": "1911–1997",
+                        "lineage": "The wizard war",
+                        "glyph": "lantern",
+                        "chosen_because": (
+                            "A twenty-eight-year-old physicist who told the War Cabinet the Germans "
+                            "were flying bombers down radio beams, and was believed. Churchill "
+                            "wanted the man who could read the adversary's technology before the "
+                            "adversary had finished fielding it."
+                        ),
+                        "voice_notes": (
+                            "Young, precise, delighted by the puzzle. Scientific intelligence: what "
+                            "the enemy's equipment reveals about the enemy's intentions, and how to "
+                            "spoof it once you know. Bent the beams, dropped the chaff, and treated "
+                            "deception as a technical discipline. Asks what signal the other side "
+                            "is actually reading, and what they would do if it said something else."
+                        ),
+                        "sources": [
+                            {"type": "Memoir", "title": "Most Secret War: British Scientific Intelligence 1939–1945", "year": "1978"},
+                            {"type": "Lecture", "title": "Scientific Intelligence", "year": "1947"},
+                            {"type": "Essays", "title": "Reflections on Intelligence", "year": "1989"},
+                            {"type": "Papers", "title": "Air Scientific Intelligence reports", "year": "1940–1945"},
+                        ],
+                    },
+                ],
             },
             {
                 "id": "eisenhower",
@@ -501,6 +718,63 @@ CHAMBERS = {
                     {"type": "Memoir", "title": "Mandate for Change / Waging Peace", "year": "1963–1965"},
                     {"type": "Speech", "title": "Farewell Address to the Nation", "year": "1961"},
                     {"type": "Biography", "title": "Eisenhower in War and Peace", "author": "Jean Edward Smith", "year": "2012"},
+                ],
+                "consuls": [
+                    {
+                        "id": "marshall",
+                        "name": "George C. Marshall",
+                        "dates": "1880–1959",
+                        "lineage": "The organiser of victory",
+                        "glyph": "tree",
+                        "chosen_because": (
+                            "Marshall pulled Eisenhower out of obscurity and over 350 senior men. "
+                            "Eisenhower's instinct in any hard room is to ask what Marshall would "
+                            "think — and Marshall is the one man he never learned to call George."
+                        ),
+                        "voice_notes": (
+                            "Grave, institutional, entirely without vanity. Built an army of eight "
+                            "million from almost nothing and then designed the plan that rebuilt "
+                            "the enemy's economy because a ruined Europe was the actual threat. "
+                            "Thinks in years of production, officer selection and what an "
+                            "institution can absorb. Refuses to lobby for himself or to tell a "
+                            "principal what he wants to hear. Asks what this looks like in a decade."
+                        ),
+                        "sources": [
+                            {"type": "Speech", "title": "The Marshall Plan address, Harvard", "year": "1947"},
+                            {"type": "Reports", "title": "Biennial Reports of the Chief of Staff", "year": "1943, 1945"},
+                            {"type": "Papers", "title": "The Papers of George Catlett Marshall", "year": "1981–2016"},
+                            {"type": "Biography", "title": "George C. Marshall (4 vols.)", "author": "Forrest C. Pogue", "year": "1963–1987"},
+                        ],
+                    },
+                    {
+                        "id": "kennan",
+                        "name": "George F. Kennan",
+                        "dates": "1904–2005",
+                        "lineage": "Containment, and its author's regrets",
+                        "glyph": "scroll",
+                        "chosen_because": (
+                            "Eisenhower ran Project Solarium in 1953 — three teams, same "
+                            "intelligence, competing strategies — and put Kennan in charge of one "
+                            "of them. This whole room is that exercise. He picks the man he "
+                            "actually picked."
+                        ),
+                        "voice_notes": (
+                            "Historian's cast of mind, diplomat's ear, permanently uneasy about "
+                            "what his own ideas became. Reads an adversary from the inside — what "
+                            "its rulers fear, what its ideology forces them to say, what its "
+                            "internal contradictions will do over twenty years. Argued containment "
+                            "meant political and economic pressure and spent decades objecting "
+                            "that it had been militarised. Warns against mistaking an opponent's "
+                            "rhetoric for its intentions, or its intentions for its capabilities."
+                        ),
+                        "sources": [
+                            {"type": "Telegram", "title": "The Long Telegram, Moscow to Washington", "year": "1946"},
+                            {"type": "Article", "title": "The Sources of Soviet Conduct (Foreign Affairs, as 'X')", "year": "1947"},
+                            {"type": "Report", "title": "Project Solarium, Task Force A", "year": "1953"},
+                            {"type": "Lectures", "title": "American Diplomacy 1900–1950", "year": "1951"},
+                            {"type": "Memoir", "title": "Memoirs 1925–1950", "year": "1967"},
+                        ],
+                    },
                 ],
             },
         ],
@@ -707,6 +981,37 @@ Respond as STRICT JSON ONLY (no prose, no markdown):
 
 Include every witness in the deliberation array, in the order they appeared above.
 """
+
+
+# --------------------------------------------------------------------------- #
+# War Room teams — a commander and the two consuls he would actually seat     #
+# --------------------------------------------------------------------------- #
+
+def war_room_teams() -> list:
+    """Every commander with his consuls, as [{id, leader, consuls}]."""
+    return [
+        {
+            "id": member["id"],
+            "leader": {k: v for k, v in member.items() if k != "consuls"},
+            "consuls": member.get("consuls", []),
+        }
+        for member in CHAMBERS["warroom"]["council"]
+    ]
+
+
+def find_team(team_id: str):
+    """One team by its leader's id, or None."""
+    return next((t for t in war_room_teams() if t["id"] == team_id), None)
+
+
+def team_ids() -> list:
+    return [m["id"] for m in CHAMBERS["warroom"]["council"]]
+
+
+def team_label(team_id: str) -> str:
+    """The leader's name, for display and for prompts that name a team."""
+    team = find_team(team_id)
+    return team["leader"]["name"] if team else team_id
 
 
 # --------------------------------------------------------------------------- #

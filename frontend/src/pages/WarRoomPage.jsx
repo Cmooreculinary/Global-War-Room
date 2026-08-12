@@ -17,6 +17,10 @@ import SituationBrief, { LeanChip } from "@/components/SituationBrief";
 import BoardRead, { MEMBER_META } from "@/components/BoardRead";
 import WarEstimate from "@/components/WarEstimate";
 import PaywallModal from "@/components/PaywallModal";
+import TeamRoster from "@/components/TeamRoster";
+import ScenarioBuilder from "@/components/ScenarioBuilder";
+import ProjectionView from "@/components/ProjectionView";
+import ScenarioView from "@/components/ScenarioView";
 import { Glyph } from "@/components/Glyphs";
 import { CHAMBER_THEME } from "@/lib/chambers";
 import { getImage } from "@/lib/images";
@@ -25,7 +29,11 @@ import {
   conveneWarRoom,
   fetchEntitlement,
   fetchWarRoomSources,
+  fetchWarRoomTeams,
+  pollRun,
   saveVerdict,
+  startProjection,
+  startScenario,
 } from "@/lib/api";
 
 const PHASES = { INTAKE: "intake", SIFTING: "sifting", BRIEF: "brief", CONVENING: "convening", ESTIMATE: "estimate" };
@@ -69,14 +77,26 @@ export default function WarRoomPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // Team modes — projections and played-out scenarios.
+  const [teams, setTeams] = useState([]);
+  const [horizon, setHorizon] = useState(5);
+  const [run, setRun] = useState(null);
+  const [runError, setRunError] = useState("");
+  const cancelPollRef = useRef(null);
+
   const briefRef = useRef(null);
   const estimateRef = useRef(null);
+  const runRef = useRef(null);
   const grid = getImage("texture_map");
 
   useEffect(() => {
     fetchWarRoomSources().then(setRegistry).catch(() => {});
     fetchEntitlement().then(setEntitlement).catch(() => {});
+    fetchWarRoomTeams().then((d) => setTeams(d.teams || [])).catch(() => {});
   }, []);
+
+  // Stop polling if the page goes away mid-run; the run itself continues server-side.
+  useEffect(() => () => cancelPollRef.current?.(), []);
 
   const busy = phase === PHASES.SIFTING || phase === PHASES.CONVENING;
   const canSift = topic.trim().length > 2 && !busy;
@@ -161,12 +181,37 @@ export default function WarRoomPage() {
     }
   };
 
+  const onRunTeams = async ({ kind, assignments }) => {
+    if (!briefDoc || run?.status === "running") return;
+    setRunError("");
+    cancelPollRef.current?.();
+    try {
+      const start = kind === "projection" ? startProjection : startScenario;
+      const { run_id } = await start({
+        briefId: briefDoc.id,
+        topic: briefDoc.topic,
+        horizonYears: horizon,
+        ...(kind === "projection" ? {} : { assignments }),
+      });
+      setRun({ id: run_id, kind, status: "running", years: [], projections: [], horizon });
+      requestAnimationFrame(() => runRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+      cancelPollRef.current = pollRun(run_id, setRun, {
+        onError: (e) => setRunError(e.message || "The run failed."),
+      });
+    } catch (e) {
+      if (!onError(e, "The exercise could not be started.")) setRunError(e.message || "");
+    }
+  };
+
   const onReset = () => {
     setPhase(PHASES.INTAKE);
     setBriefDoc(null);
     setResult(null);
     setError("");
     setSaved(false);
+    cancelPollRef.current?.();
+    setRun(null);
+    setRunError("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -307,7 +352,7 @@ export default function WarRoomPage() {
           </div>
 
           <aside className="lg:col-span-5">
-            <BoardRoster />
+            <BoardRoster teams={teams} />
             <SourceRegistry registry={registry} />
           </aside>
         </section>
@@ -438,6 +483,73 @@ export default function WarRoomPage() {
             </p>
           </motion.section>
         )}
+
+        {/* ---- Team modes: projections and played-out scenarios ---- */}
+        {briefDoc && (phase === PHASES.BRIEF || phase === PHASES.ESTIMATE) && teams.length > 0 && (
+          <motion.section
+            ref={runRef}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="mt-24 scroll-mt-24"
+            data-testid="warroom-teams-section"
+          >
+            <div className="border-b pb-6" style={{ borderColor: `${t.accent}33` }}>
+              <p className="smallcaps" style={{ color: t.accent }}>
+                Step three — teams of three, and the next {horizon} years
+              </p>
+              <h2
+                className="cortex-display mt-2 text-4xl tracking-tight text-pearl md:text-5xl"
+                style={{ fontWeight: 700 }}
+              >
+                Play it forward
+              </h2>
+              <p className="cortex-editorial mt-3 max-w-3xl text-base text-bone/70">
+                Each commander now sits with the two consuls he would actually have picked. Take their
+                projections, or hand them a country and play the years out — one actor advised by all five,
+                or several actors with the teams split between them.
+              </p>
+            </div>
+
+            <div className="mt-8">
+              <ScenarioBuilder
+                teams={teams}
+                horizon={horizon}
+                onHorizonChange={setHorizon}
+                onRun={onRunTeams}
+                running={run?.status === "running"}
+              />
+            </div>
+
+            {runError && (
+              <p className="cortex-editorial mt-6 text-sm" style={{ color: "#D08C7A" }} data-testid="run-error">
+                {runError}
+              </p>
+            )}
+
+            {run && (
+              <div className="mt-12">
+                {run.status === "running" && <RunProgress run={run} />}
+
+                {run.kind === "projection" && run.projections?.length > 0 && (
+                  <div className="mt-8">
+                    <ProjectionView
+                      projections={run.projections}
+                      comparison={run.comparison}
+                      horizon={run.horizon || horizon}
+                    />
+                  </div>
+                )}
+
+                {run.kind === "scenario" && (run.opening?.length > 0 || run.years?.length > 0) && (
+                  <div className="mt-8">
+                    <ScenarioView run={run} />
+                  </div>
+                )}
+              </div>
+            )}
+          </motion.section>
+        )}
       </div>
 
       <PaywallModal open={paywallOpen} onClose={() => setPaywallOpen(false)} freeLimit={entitlement?.free_limit || 5} />
@@ -474,7 +586,27 @@ function Header({ entitlement }) {
   );
 }
 
-function BoardRoster() {
+function BoardRoster({ teams = [] }) {
+  // Once the rosters load, each commander is shown with the two consuls he
+  // would seat; until then, the leaders alone.
+  if (teams.length > 0) {
+    return (
+      <div data-testid="warroom-roster">
+        <p className="smallcaps" style={{ color: t.accent }}>
+          Seated at the table
+        </p>
+        <p className="cortex-editorial mt-1 text-xs text-bone/55">
+          Each commander with the two consuls he would pick. Open one to see why.
+        </p>
+        <div className="mt-4 space-y-3">
+          {teams.map((team) => (
+            <TeamRoster key={team.id} team={team} compact />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div data-testid="warroom-roster">
       <p className="smallcaps" style={{ color: t.accent }}>
@@ -626,6 +758,48 @@ function Working({ messages, testid }) {
       </AnimatePresence>
       <p className="smallcaps mt-4 text-ash">This takes a minute. It is reading everything.</p>
     </motion.div>
+  );
+}
+
+function RunProgress({ run }) {
+  const { stage = "", year, total } = run.progress || {};
+  const label =
+    {
+      queued: "Seating the teams.",
+      projection: "The teams are drawing their projections.",
+      comparison: "Reading the projections against each other.",
+      opening: "The councils are setting their objectives.",
+      opening_done: "Objectives set. Year one begins.",
+      debrief: "Writing the debrief.",
+    }[stage] ||
+    (stage === "year" || stage === "year_done"
+      ? `Playing year ${year} of ${total}.`
+      : "Working.");
+
+  const done = run.kind === "projection" ? (run.projections?.length || 0) : (run.years?.length || 0);
+  const outOf = run.kind === "projection" ? 5 : run.horizon || total || 5;
+  const pct = Math.min(100, Math.round((done / Math.max(1, outOf)) * 100));
+
+  return (
+    <div data-testid="run-progress">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="cortex-display text-lg italic text-bone/80">{label}</p>
+        <span className="smallcaps tabular text-ash">
+          {done} / {outOf}
+        </span>
+      </div>
+      <div className="mt-3 h-px w-full" style={{ background: "#2A2A36" }}>
+        <motion.div
+          className="h-px"
+          style={{ background: t.accent }}
+          animate={{ width: `${Math.max(4, pct)}%` }}
+          transition={{ duration: 0.6 }}
+        />
+      </div>
+      <p className="smallcaps mt-3 text-ash">
+        This runs a call per stage — several minutes. Results appear as they land; you can leave the tab open.
+      </p>
+    </div>
   );
 }
 
