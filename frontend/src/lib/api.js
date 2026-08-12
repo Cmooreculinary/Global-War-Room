@@ -119,6 +119,36 @@ export async function closeCourt(sessionId, attendeeId) {
   return data;
 }
 
+// ---- War Room API -------------------------------------------------------- //
+
+export async function fetchWarRoomSources() {
+  const { data } = await http.get(`/warroom/sources`);
+  return data; // { live_enabled, search, feeds, state_feeds, note }
+}
+
+export async function buildWarRoomBrief({ topic, pasted = "", live = true, windowHours = 24, includeState = false }) {
+  const { data } = await http.post(
+    `/warroom/brief`,
+    { topic, pasted, live, window_hours: windowHours, include_state: includeState },
+    { timeout: 180000 }
+  );
+  return data; // { id, topic, brief, sources, items }
+}
+
+export async function conveneWarRoom({ briefId, topic, question = "" }) {
+  const { data } = await http.post(
+    `/warroom/convene`,
+    { brief_id: briefId, topic, question, archive_id: getArchiveId() },
+    { timeout: 300000 }
+  );
+  return data; // { id, brief, board, estimate, … }
+}
+
+export async function fetchWarRoomEstimate(recordId) {
+  const { data } = await http.get(`/warroom/estimate/${recordId}`);
+  return data;
+}
+
 // ---- Billing API --------------------------------------------------------- //
 
 export async function fetchPlans() {

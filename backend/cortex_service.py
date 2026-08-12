@@ -34,7 +34,14 @@ def _api_key() -> str:
     return key
 
 
-def _build_chat(system_message: str, session_id: Optional[str] = None) -> LlmChat:
+DEFAULT_MAX_TOKENS = 2500
+
+
+def _build_chat(
+    system_message: str,
+    session_id: Optional[str] = None,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+) -> LlmChat:
     return (
         LlmChat(
             api_key=_api_key(),
@@ -42,7 +49,7 @@ def _build_chat(system_message: str, session_id: Optional[str] = None) -> LlmCha
             system_message=system_message,
         )
         .with_model("anthropic", ANTHROPIC_MODEL)
-        .with_params(max_tokens=2500)
+        .with_params(max_tokens=max_tokens)
     )
 
 
@@ -60,8 +67,12 @@ def _strip_json(raw: str) -> str:
     return s.strip()
 
 
-async def _ask_json(system_message: str, user_text: str) -> dict:
-    chat = _build_chat(system_message)
+async def _ask_json(
+    system_message: str,
+    user_text: str,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+) -> dict:
+    chat = _build_chat(system_message, max_tokens=max_tokens)
     response = await chat.send_message(UserMessage(text=user_text))
     cleaned = _strip_json(response)
     try:

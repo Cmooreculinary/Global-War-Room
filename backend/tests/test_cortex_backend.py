@@ -37,7 +37,7 @@ def test_list_chambers(http):
     data = r.json()
     assert isinstance(data, list)
     ids = {c["id"] for c in data}
-    assert ids == {"senate", "boardroom", "courtroom", "council", "forge"}
+    assert ids == {"senate", "boardroom", "courtroom", "council", "warroom", "forge"}
     required = {"id", "name", "domain", "biology", "tagline",
                 "placeholder", "cta", "loading", "error", "council"}
     for c in data:

@@ -158,8 +158,29 @@ export const OwlGlyph = (p) => (
   </Wrap>
 );
 
+export const SwordGlyph = (p) => (
+  <Wrap {...p}>
+    <path d="M16 3 l 3 4 v 13 h -6 V 7 z" />
+    <path d="M9 21 h 14" />
+    <path d="M16 21 v 6" />
+    <path d="M13 27 h 6" />
+  </Wrap>
+);
+
+export const EagleGlyph = (p) => (
+  <Wrap {...p}>
+    <path d="M16 9 q -3 -4 -9 -4 q 3 4 3 8 q -4 0 -6 2 q 5 2 7 6" />
+    <path d="M16 9 q 3 -4 9 -4 q -3 4 -3 8 q 4 0 6 2 q -5 2 -7 6" />
+    <path d="M16 8 v 15" />
+    <path d="M13 26 h 6" />
+    <circle cx="16" cy="6" r="1.8" />
+  </Wrap>
+);
+
 export const GLYPHS = {
   laurel: LaurelGlyph,
+  sword: SwordGlyph,
+  eagle: EagleGlyph,
   scales: ScalesGlyph,
   shield: ShieldGlyph,
   compass: CompassGlyph,

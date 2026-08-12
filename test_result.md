@@ -101,3 +101,178 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: |
+  Turn the app into a military strategy agent with a board of five great military
+  leaders. Take what is happening in the world today, sift it into unbiased,
+  purely factual form, give the board those facts, and let each member give an
+  educated read on what the next steps would or should be, each according to his
+  own strategy.
+
+  Board agreed with the user: Alexander the Great, Genghis Khan, Napoleon
+  Bonaparte, Winston Churchill, Dwight D. Eisenhower. Eisenhower was chosen over
+  MacArthur for political judgement. Hitler was raised and left off — he fails
+  the user's own "saved or expanded their country" criterion; Napoleon covers the
+  expansionist-autocrat perspective instead. News intake: both live pull and
+  paste-in.
+
+backend:
+  - task: "War Room chamber + five-commander roster"
+    implemented: true
+    working: "NA"
+    file: "backend/personas.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          Added the `warroom` chamber (Amygdala) to CHAMBERS with five members,
+          each with voice_notes and 3–5 verifiable sources. Flows automatically
+          into /api/chambers, /api/personas and the Receipts page.
+          NOTE: test_cortex_backend.py::test_list_chambers asserted an exact set
+          of five chamber ids; updated to include "warroom".
+
+  - task: "Intelligence intake — live pull + paste, with lean labelling"
+    implemented: true
+    working: "NA"
+    file: "backend/intel.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          GDELT DOC 2.0 topic search plus ten standing RSS feeds spanning the
+          spectrum; two state outlets available but off by default. Every item
+          carries an outlet and a declared lean so the sift can audit framing.
+          Pasted material is split on --- and reads an optional `Outlet:` label.
+          Individual source failures are absorbed and reported, never raised.
+          Verified locally: 11 unit tests over parsing (RSS 2.0 / Atom / RDF /
+          GDELT JSON and its HTML error page) via httpx.MockTransport.
+          NOT verified: real outbound fetching — the dev sandbox proxy returns
+          403 for these hosts. Needs one live run in an environment with egress.
+          Set WARROOM_LIVE_SOURCES=0 to disable live pulling entirely.
+
+  - task: "Three-pass pipeline — sift, board, estimate"
+    implemented: true
+    working: "NA"
+    file: "backend/warroom_service.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          Pass 1 (Cartographer) reduces coverage to established / contested /
+          unknown, and records every phrase of loaded language it removed.
+          Pass 2 seats the five commanders against that brief ONLY — they never
+          see the raw coverage, which is what keeps an outlet's framing out of
+          the deliberation. Pass 3 draws the estimate: convergence, fault line,
+          decision point, most-likely vs most-dangerous course, and indicators.
+          Degrades honestly: no sources -> an empty brief that says so rather
+          than a confident one; a failed estimate falls back to the reads.
+
+  - task: "War Room endpoints"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          GET /api/warroom/sources, POST /api/warroom/brief,
+          POST /api/warroom/convene, GET /api/warroom/estimate/{id}.
+          Sessions persist to db.verdicts in the shared Verdict shape (plus the
+          richer board/estimate fields), so /verdict/:id, save and the Archive
+          all keep working. Paywall gate deduplicated into _enforce_paywall()
+          and reused by /deliberate, /court/create and /warroom/convene —
+          identical semantics, three call sites collapsed to one.
+
+frontend:
+  - task: "War Room page and flow"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/WarRoomPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          /warroom — topic + optional question + optional pasted material, with
+          live/state/window controls. The brief renders BEFORE the board is
+          convened so the facts can be checked first. Then five reads and the
+          estimate. Deliberately not wired into the Landing brain: the hero has
+          five hard-coded lobes and the War Room needs source material, not just
+          a question. Reached via the header nav instead.
+          Verified: `yarn build` compiles clean, no lint warnings.
+          NOT verified: rendering against a live backend (no backend deps in the
+          dev sandbox). Needs a browser pass.
+
+  - task: "Brief, board and estimate components"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/SituationBrief.jsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          SituationBrief renders the fact sheet including the framing-removed
+          audit table (as published / source + lean / as recorded) — the part
+          that earns the word "unbiased". BoardRead shows each commander's read,
+          proposed moves, decisive factor, falsifier and risk. WarEstimate shows
+          the estimate and the indicators table.
+
+metadata:
+  created_by: "main_agent"
+  version: "1.1"
+  test_sequence: 0
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Intelligence intake — live pull + paste, with lean labelling"
+    - "Three-pass pipeline — sift, board, estimate"
+    - "War Room endpoints"
+    - "War Room page and flow"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: |
+      Added The War Room. Two test suites are new:
+
+        backend/tests/test_warroom_units.py   — 30 unit tests, no network/model
+        backend/tests/test_intel_parsing.py   — 11 parsing tests via MockTransport
+        backend/tests/test_warroom_backend.py — integration, needs :8001 + model
+
+      Run the fast ones with `cd backend && pytest -m "not slow"` (41 passing
+      locally). The integration file marks the model-dependent tests `slow`; it
+      feeds pasted material rather than live news so it does not depend on what
+      the wire happens to carry today.
+
+      Two things I could not verify in the dev sandbox and that need a real run:
+      1. Live fetching. The sandbox proxy 403s every news host. The failure path
+         is tested and degrades cleanly, but one real pull should be eyeballed:
+         POST /api/warroom/brief {"topic":"Taiwan Strait","live":true} and check
+         sources.spread spans more than one lean.
+      2. The /warroom page against a live backend.
+
+      One bug found and fixed while testing: `lstrip("www.")` strips characters
+      rather than a prefix, so wsj.com resolved to sj.com and lost its lean
+      label. Test added. A second bug the tests caught: RDF/RSS-1.0 feeds
+      (Deutsche Welle) dropped every item because the title lookup was missing
+      the RSS 1.0 namespace.
