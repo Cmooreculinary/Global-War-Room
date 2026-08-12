@@ -64,6 +64,7 @@ module.exports = {
         courtroom: { DEFAULT: "#3A2419", accent: "#A88A4A" },
         council: { DEFAULT: "#1B2A5C", accent: "#F5F2EC" },
         forge: { DEFAULT: "#C84A1F", accent: "#FFE5B4" },
+        warroom: { DEFAULT: "#1E2A33", accent: "#D6C08A" },
       },
       keyframes: {
         "accordion-down": {

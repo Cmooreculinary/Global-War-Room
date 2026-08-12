@@ -13,6 +13,7 @@ CHAMBER_VOICES = {
     "boardroom": "sage",
     "courtroom": "fable",
     "council": "echo",
+    "warroom": "ash",
     "forge": "nova",
 }
 

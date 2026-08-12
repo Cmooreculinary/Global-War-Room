@@ -4,7 +4,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, BackgroundTasks, FastAPI, File, HTTPException, Query, Request, UploadFile
@@ -33,6 +33,8 @@ from billing import (  # noqa: E402
     stripe_client,
 )
 from personas import CHAMBERS, RECONSTRUCTION_DISCLAIMER  # noqa: E402
+from intel import LIVE_ENABLED, RSS_FEEDS, STATE_FEEDS  # noqa: E402
+from warroom_service import build_brief, run_war_room  # noqa: E402
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -163,6 +165,54 @@ class CourtObjectRequest(BaseModel):
     content: str
 
 
+# ---- War Room models ----------------------------------------------------- #
+
+class WarRoomBriefRequest(BaseModel):
+    topic: str
+    pasted: str = ""
+    live: bool = True
+    window_hours: int = Field(default=24, ge=1, le=168)
+    include_state: bool = False
+
+
+class WarRoomBriefResponse(BaseModel):
+    id: str
+    topic: str
+    brief: Dict[str, Any]
+    sources: Dict[str, Any]
+    items: List[Dict[str, Any]] = Field(default_factory=list)
+    created_at: datetime
+
+
+class WarRoomConveneRequest(BaseModel):
+    """Either hand back a brief_id from /warroom/brief, or supply a topic and
+    let the room gather and sift in one call."""
+    brief_id: Optional[str] = None
+    topic: Optional[str] = None
+    question: str = ""
+    pasted: str = ""
+    live: bool = True
+    window_hours: int = Field(default=24, ge=1, le=168)
+    include_state: bool = False
+    archive_id: Optional[str] = None
+
+
+class WarRoomEstimateResponse(BaseModel):
+    id: str
+    topic: str
+    question: str = ""
+    brief: Dict[str, Any]
+    sources: Dict[str, Any] = Field(default_factory=dict)
+    items: List[Dict[str, Any]] = Field(default_factory=list)
+    board: List[Dict[str, Any]] = Field(default_factory=list)
+    estimate: Dict[str, Any] = Field(default_factory=dict)
+    verdict: str = ""
+    chamber: str = "The War Room"
+    chamber_id: str = "warroom"
+    saved: bool = False
+    created_at: datetime
+
+
 # ---- Billing models ------------------------------------------------------ #
 
 class CheckoutCreateRequest(BaseModel):
@@ -260,23 +310,15 @@ async def deliberate(req: DeliberateRequest):
     if req.chamber_id not in CHAMBERS:
         raise HTTPException(status_code=404, detail="Chamber not found")
 
-    # Paywall gate: enforce only when archive_id present (browser-bound user)
-    if req.archive_id:
-        is_member, _ = await _is_active_member(req.archive_id)
-        if not is_member:
-            used = await _free_verdicts_used(req.archive_id)
-            if used >= FREE_VERDICT_LIMIT:
-                raise HTTPException(
-                    status_code=402,
-                    detail=(
-                        "You've used your 5 free verdicts. "
-                        "Become a member at /pricing to keep convening."
-                    ),
-                )
+    await _enforce_paywall(req.archive_id)
 
     try:
         if req.chamber_id == "forge":
             payload = await deliberate_forge(req.question)
+        elif req.chamber_id == "warroom":
+            # The War Room needs source material, so the question doubles as the
+            # topic here. The dedicated /warroom endpoints give the full flow.
+            payload = await run_war_room(topic=req.question, question=req.question)
         else:
             payload = await deliberate_with_committee(req.chamber_id, req.question)
     except Exception as e:
@@ -302,6 +344,11 @@ async def deliberate(req: DeliberateRequest):
 
     doc = verdict.model_dump()
     doc["created_at"] = doc["created_at"].isoformat()
+    # Keep the War Room's richer product (brief, board, estimate) on the record
+    # even though the shared Verdict shape cannot carry it.
+    for key in ("topic", "brief", "sources", "items", "board", "estimate"):
+        if key in payload:
+            doc[key] = payload[key]
     await db.verdicts.insert_one(doc)
     return verdict
 
@@ -378,6 +425,27 @@ async def _free_verdicts_used(archive_id: Optional[str]) -> int:
     if not archive_id:
         return 0
     return await db.verdicts.count_documents({"archive_id": archive_id})
+
+
+async def _enforce_paywall(archive_id: Optional[str]) -> None:
+    """Raise 402 once a non-member browser session is out of free verdicts.
+
+    Only enforced when an archive_id is present — anonymous API callers with no
+    browser session are not metered.
+    """
+    if not archive_id:
+        return
+    is_member, _ = await _is_active_member(archive_id)
+    if is_member:
+        return
+    if await _free_verdicts_used(archive_id) >= FREE_VERDICT_LIMIT:
+        raise HTTPException(
+            status_code=402,
+            detail=(
+                "You've used your 5 free verdicts. "
+                "Become a member at /pricing to keep convening."
+            ),
+        )
 
 
 async def _entitlement(archive_id: Optional[str]) -> EntitlementResponse:
@@ -539,6 +607,175 @@ async def stripe_webhook(request: Request):
 
 
 # --------------------------------------------------------------------------- #
+# The War Room — sift the day's coverage, then let the board read it          #
+# --------------------------------------------------------------------------- #
+
+@api_router.get("/warroom/sources")
+async def warroom_sources():
+    """What the room can pull from, so the source list is auditable up front."""
+    return {
+        "live_enabled": LIVE_ENABLED,
+        "search": [{
+            "outlet": "GDELT",
+            "lean": "aggregator",
+            "note": "Topic search across worldwide coverage; each result is labelled by its own outlet.",
+        }],
+        "feeds": [
+            {"outlet": o, "lean": lean, "country": country}
+            for o, _url, lean, country in RSS_FEEDS
+        ],
+        "state_feeds": [
+            {"outlet": o, "lean": lean, "country": country}
+            for o, _url, lean, country in STATE_FEEDS
+        ],
+        "note": (
+            "State outlets are excluded unless you ask for them. They are useful "
+            "for reading what a government wants believed, and are never counted "
+            "as corroboration."
+        ),
+    }
+
+
+@api_router.post("/warroom/brief", response_model=WarRoomBriefResponse)
+async def warroom_brief(req: WarRoomBriefRequest):
+    """Pass one: gather today's coverage and sift it into a neutral fact sheet.
+
+    Returned before the board sees it, so the facts can be reviewed — and
+    argued with — before anyone reasons from them.
+    """
+    topic = req.topic.strip()
+    if not topic:
+        raise HTTPException(status_code=400, detail="A topic is required")
+
+    try:
+        gathered = await build_brief(
+            topic,
+            pasted=req.pasted,
+            live=req.live,
+            window_hours=req.window_hours,
+            include_state=req.include_state,
+        )
+    except Exception as e:
+        logger.exception("War Room briefing failed")
+        raise HTTPException(status_code=502, detail=CHAMBERS["warroom"]["error"]) from e
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "topic": topic,
+        "brief": gathered["brief"],
+        "sources": gathered["sources"],
+        "items": gathered["items"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.warroom_briefs.insert_one(dict(doc))
+    return WarRoomBriefResponse(**{**doc, "created_at": datetime.fromisoformat(doc["created_at"])})
+
+
+@api_router.post("/warroom/convene", response_model=WarRoomEstimateResponse)
+async def warroom_convene(req: WarRoomConveneRequest):
+    """Pass two and three: the board reads the brief, then the estimate is drawn.
+
+    Pass a brief_id to reuse a fact sheet the user has already seen; pass a
+    topic to gather, sift and convene in one shot.
+    """
+    await _enforce_paywall(req.archive_id)
+
+    prebuilt = None
+    topic = (req.topic or "").strip()
+    if req.brief_id:
+        stored = await db.warroom_briefs.find_one({"id": req.brief_id}, {"_id": 0})
+        if not stored:
+            raise HTTPException(status_code=404, detail="Brief not found")
+        prebuilt = {
+            "brief": stored["brief"],
+            "sources": stored.get("sources", {}),
+            "items": stored.get("items", []),
+        }
+        topic = topic or stored.get("topic", "")
+    if not topic:
+        raise HTTPException(status_code=400, detail="A topic or a brief_id is required")
+
+    try:
+        result = await run_war_room(
+            topic=topic,
+            question=req.question.strip(),
+            pasted=req.pasted,
+            live=req.live,
+            window_hours=req.window_hours,
+            include_state=req.include_state,
+            prebuilt=prebuilt,
+        )
+    except Exception as e:
+        logger.exception("War Room deliberation failed")
+        raise HTTPException(status_code=502, detail=CHAMBERS["warroom"]["error"]) from e
+
+    now = datetime.now(timezone.utc)
+    record_id = str(uuid.uuid4())
+    doc = {
+        "id": record_id,
+        "chamber_id": "warroom",
+        "chamber": result["chamber"],
+        # The Archive and the shared verdict page key on `question`; the topic is
+        # the honest thing to show there when no explicit question was asked.
+        "question": req.question.strip() or topic,
+        "topic": topic,
+        "brief": result["brief"],
+        "sources": result["sources"],
+        "items": result["items"],
+        "board": result["board"],
+        "estimate": result["estimate"],
+        "deliberation": result["deliberation"],
+        "verdict": result["verdict"],
+        "committee": False,
+        "witnesses_called": None,
+        "archive_id": req.archive_id,
+        "saved": False,
+        "created_at": now.isoformat(),
+    }
+    await db.verdicts.insert_one(dict(doc))
+
+    return WarRoomEstimateResponse(
+        id=record_id,
+        topic=topic,
+        question=req.question.strip(),
+        brief=result["brief"],
+        sources=result["sources"],
+        items=result["items"],
+        board=result["board"],
+        estimate=result["estimate"],
+        verdict=result["verdict"],
+        created_at=now,
+    )
+
+
+@api_router.get("/warroom/estimate/{record_id}", response_model=WarRoomEstimateResponse)
+async def warroom_estimate(record_id: str):
+    """Re-read a War Room session in full — brief, board and estimate."""
+    doc = await db.verdicts.find_one(
+        {"id": record_id, "chamber_id": "warroom"}, {"_id": 0}
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="War Room session not found")
+    created = doc.get("created_at")
+    return WarRoomEstimateResponse(
+        id=doc["id"],
+        topic=doc.get("topic") or doc.get("question", ""),
+        question=doc.get("question", ""),
+        brief=doc.get("brief") or {},
+        sources=doc.get("sources") or {},
+        items=doc.get("items") or [],
+        board=doc.get("board") or [],
+        estimate=doc.get("estimate") or {},
+        verdict=doc.get("verdict", ""),
+        saved=bool(doc.get("saved", False)),
+        created_at=(
+            datetime.fromisoformat(created) if isinstance(created, str)
+            else created or datetime.now(timezone.utc)
+        ),
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Court Sessions — invite-witness courtroom flow                              #
 # --------------------------------------------------------------------------- #
 
@@ -607,18 +844,7 @@ async def court_create(req: CourtCreateRequest):
         raise HTTPException(status_code=400, detail="Question is required")
 
     # Paywall gate (court convening counts the same as solo deliberation)
-    if req.archive_id:
-        is_member, _ = await _is_active_member(req.archive_id)
-        if not is_member:
-            used = await _free_verdicts_used(req.archive_id)
-            if used >= FREE_VERDICT_LIMIT:
-                raise HTTPException(
-                    status_code=402,
-                    detail=(
-                        "You've used your 5 free verdicts. "
-                        "Become a member at /pricing to keep convening."
-                    ),
-                )
+    await _enforce_paywall(req.archive_id)
 
     routing = await route_and_panel(q)
 

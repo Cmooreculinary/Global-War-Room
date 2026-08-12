@@ -8,6 +8,7 @@ import Landing from "@/pages/Landing";
 import ChamberPage from "@/pages/ChamberPage";
 import CourtPage from "@/pages/CourtPage";
 import ForgePage from "@/pages/ForgePage";
+import WarRoomPage from "@/pages/WarRoomPage";
 import VerdictPage from "@/pages/VerdictPage";
 import ArchivePage from "@/pages/ArchivePage";
 import AboutPage from "@/pages/AboutPage";
@@ -37,6 +38,8 @@ function App() {
           <Route path="/cortex" element={<Landing />} />
           <Route path="/court/:sessionId" element={<CourtPage />} />
           <Route path="/forge" element={<ForgePage />} />
+          <Route path="/warroom" element={<WarRoomPage />} />
+          <Route path="/chamber/warroom" element={<Navigate to="/warroom" replace />} />
           <Route path="/chamber/:id" element={<ChamberPage />} />
           <Route path="/chamber/forge" element={<Navigate to="/forge" replace />} />
           <Route path="/verdict/:id" element={<VerdictPage />} />
