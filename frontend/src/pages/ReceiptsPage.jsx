@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 
 import Layout from "@/components/Layout";
 import { Glyph } from "@/components/Glyphs";
+import { CharacterSheet } from "@/components/TeamRoster";
 import { CHAMBER_THEME } from "@/lib/chambers";
 import { fetchPersonas } from "@/lib/api";
 
@@ -187,6 +188,41 @@ function PersonaReceipt({ member, chamberId }) {
         <p className="cortex-editorial mt-4 text-sm leading-relaxed text-bone/70">
           {member.voice_notes}
         </p>
+        <CharacterSheet profile={member.profile} />
+        {member.consuls?.length > 0 && (
+          <div className="mt-6 border-t border-slate/60 pt-4">
+            <p className="smallcaps text-ash">Consuls he seats</p>
+            <ul className="mt-3 space-y-4">
+              {member.consuls.map((consul) => (
+                <li key={consul.id}>
+                  <div className="flex items-baseline gap-2">
+                    <span className="cortex-display text-[0.97rem] text-pearl" style={{ fontWeight: 600 }}>
+                      {consul.name}
+                    </span>
+                    <span className="smallcaps tabular text-ash" style={{ fontSize: "0.6rem" }}>
+                      {consul.dates}
+                    </span>
+                  </div>
+                  <p className="cortex-editorial mt-1 text-sm italic leading-relaxed text-bone/60">
+                    {consul.chosen_because}
+                  </p>
+                  <CharacterSheet profile={consul.profile} />
+                  {consul.sources?.length > 0 && (
+                    <ul className="mt-2 space-y-1">
+                      {consul.sources.map((s) => (
+                        <li key={`${consul.id}-${s.title}`} className="cortex-editorial text-xs text-bone/55">
+                          {s.title}
+                          {s.author ? `, ${s.author}` : ""}
+                          {s.year ? ` (${s.year})` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* Right: source ledger */}

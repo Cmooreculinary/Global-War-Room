@@ -14,32 +14,51 @@ So there is no "US mode" and no "China mode" in this file. There is one
 scenario engine that takes assignments, and presets in the UI that fill them in.
 """
 from personas import CHAMBERS, WARROOM_ANALYSIS_BOUNDARY, find_team
+from profiles import FIDELITY_RULE, render_profile
 
 
 # --------------------------------------------------------------------------- #
 # Rendering                                                                   #
 # --------------------------------------------------------------------------- #
 
-def render_team(team: dict, indent: str = "") -> str:
-    """A team's three voices, for a prompt."""
+def render_team(team: dict, indent: str = "", depth: str = "full") -> str:
+    """A team's three voices, for a prompt.
+
+    `depth` controls how much of each character sheet comes along. A scenario
+    can have fifteen figures at the table; full sheets for all of them would
+    crowd out the situation they are supposed to be reasoning about.
+    """
     leader = team["leader"]
     lines = [
         f"{indent}TEAM {leader['name'].upper()} — led by {leader['name']} ({leader['dates']}), {leader['lineage']}",
         f"{indent}  {leader['voice_notes']}",
+        render_profile(leader["id"], leader["name"], depth=depth, indent=indent + "  "),
     ]
     for consul in team["consuls"]:
         lines.append(
             f"{indent}  Consul — {consul['name']} ({consul['dates']}), {consul['lineage']}. "
             f"Seated because: {consul['chosen_because']} {consul['voice_notes']}"
         )
-    return "\n".join(lines)
+        lines.append(render_profile(consul["id"], consul["name"], depth=depth, indent=indent + "    "))
+    return "\n".join(line for line in lines if line.strip())
 
 
-def render_assignments(assignments: list) -> str:
-    """Who is playing whom."""
+def render_assignments(assignments: list, depth: str = "auto") -> str:
+    """Who is playing whom.
+
+    Depth adapts to how crowded the table is: a two-team exercise can afford
+    full character sheets, a five-team one cannot without burying the brief.
+    """
+    if depth == "auto":
+        seated = sum(len(a["teams"]) for a in assignments)
+        depth = "full" if seated <= 2 else "brief"
+
     blocks = []
     for a in assignments:
-        teams = "\n\n".join(render_team(find_team(tid), indent="    ") for tid in a["teams"] if find_team(tid))
+        teams = "\n\n".join(
+            render_team(find_team(tid), indent="    ", depth=depth)
+            for tid in a["teams"] if find_team(tid)
+        )
         blocks.append(f"ACTOR: {a['actor']}\n  Advised by:\n\n{teams}")
     return "\n\n".join(blocks)
 
@@ -48,7 +67,9 @@ TEAM_RULES = """Rules for every team:
 - The three voices are not interchangeable. The leader decides, but a consul who merely agrees with his principal is a wasted seat — each was chosen for the thing he tells his leader that his leader does not want to hear.
 - Reason only from the brief and from what has already happened in this scenario. If you need a fact you do not have, say what you would need to know.
 - No anachronism games. Each figure translates his own doctrine to present conditions and names the modern instrument that does the work his old one did.
-- Concrete over grand. "Move the carrier group" beats "project strength"."""
+- Concrete over grand. "Move the carrier group" beats "project strength".
+
+""" + FIDELITY_RULE
 
 
 # --------------------------------------------------------------------------- #

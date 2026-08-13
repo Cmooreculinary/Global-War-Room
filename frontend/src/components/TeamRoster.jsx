@@ -63,6 +63,7 @@ export default function TeamRoster({ team, compact = false, selectable = false, 
           {!compact && (
             <p className="cortex-editorial text-sm leading-relaxed text-bone/75">{leader.voice_notes}</p>
           )}
+          <CharacterSheet profile={leader.profile} />
           <p className="smallcaps mt-4" style={{ color: ACCENT }}>
             His consuls
           </p>
@@ -92,12 +93,108 @@ export default function TeamRoster({ team, compact = false, selectable = false, 
                       {consul.voice_notes}
                     </p>
                   )}
+                  <CharacterSheet profile={consul.profile} />
                 </div>
               </li>
             ))}
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * The character sheet — what actually separates one commander from another.
+ * The failure modes are shown as prominently as the rules on purpose: they are
+ * the reason five men give five different answers instead of one.
+ */
+export function CharacterSheet({ profile }) {
+  const [open, setOpen] = useState(false);
+  if (!profile) return null;
+
+  const rules = profile.heuristics || [];
+  const flaws = profile.blind_spots || [];
+
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="smallcaps text-ash transition-colors hover:text-bone"
+        data-testid="toggle-character-sheet"
+      >
+        {open ? "− Character" : "+ Character"}
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-3 border-l pl-4" style={{ borderColor: "#2A2A36" }}>
+          {profile.formation && <Line label="Formation" value={profile.formation} />}
+          {profile.temperament && <Line label="Temperament" value={profile.temperament} />}
+          {profile.reads_first && <Line label="Notices first" value={profile.reads_first} tone={ACCENT} />}
+
+          {rules.length > 0 && (
+            <div>
+              <p className="smallcaps" style={{ color: ACCENT }}>
+                How he decides
+              </p>
+              <ul className="mt-1 space-y-1">
+                {rules.map((rule, i) => (
+                  <li key={i} className="cortex-editorial text-sm leading-relaxed text-bone/80">
+                    — {rule}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {profile.signature_move && <Line label="Signature" value={profile.signature_move} />}
+
+          {flaws.length > 0 && (
+            <div>
+              <p className="smallcaps" style={{ color: "#D08C7A" }}>
+                How he fails
+              </p>
+              <ul className="mt-1 space-y-1">
+                {flaws.map((flaw, i) => (
+                  <li key={i} className="cortex-editorial text-sm leading-relaxed text-bone/80">
+                    — {flaw}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {profile.breaking_point && <Line label="What stopped him" value={profile.breaking_point} />}
+          {profile.updates_when && <Line label="Changes his mind" value={profile.updates_when} />}
+          {profile.tell && <Line label="Tell" value={profile.tell} tone={ACCENT} />}
+
+          {profile.hard_truth && (
+            <div
+              className="border p-3"
+              style={{ borderColor: "#D08C7A44", background: "rgba(208,140,122,0.06)", borderRadius: 2 }}
+            >
+              <p className="smallcaps" style={{ color: "#D08C7A" }}>
+                Not sanitised
+              </p>
+              <p className="cortex-editorial mt-1 text-sm leading-relaxed text-bone/85">
+                {profile.hard_truth}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Line({ label, value, tone }) {
+  return (
+    <div>
+      <p className="smallcaps" style={{ color: tone || "#6B6B78" }}>
+        {label}
+      </p>
+      <p className="cortex-editorial mt-0.5 text-sm leading-relaxed text-bone/80">{value}</p>
     </div>
   );
 }

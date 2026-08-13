@@ -5,6 +5,8 @@ Each persona carries a `sources` list (the receipts) so users can verify the
 public corpus we reasoned from.
 """
 
+from profiles import FIDELITY_RULE, PROFILES, render_profile
+
 RECONSTRUCTION_DISCLAIMER = (
     "These voices are reconstructions, not channelings. We do not pretend to speak for "
     "the dead or the living. We reason from each figure's public record — their books, "
@@ -984,6 +986,29 @@ Include every witness in the deliberation array, in the order they appeared abov
 
 
 # --------------------------------------------------------------------------- #
+# Character sheets                                                            #
+# --------------------------------------------------------------------------- #
+
+def _attach_profiles() -> None:
+    """Hang each figure's character sheet off its roster entry.
+
+    Done here rather than inline in CHAMBERS so the sheets have one home, and
+    at import so every consumer — the API, the Receipts page, the prompts —
+    sees the same object without having to know profiles.py exists.
+    """
+    for chamber in CHAMBERS.values():
+        for member in chamber["council"]:
+            if member["id"] in PROFILES:
+                member["profile"] = PROFILES[member["id"]]
+            for consul in member.get("consuls", []):
+                if consul["id"] in PROFILES:
+                    consul["profile"] = PROFILES[consul["id"]]
+
+
+_attach_profiles()
+
+
+# --------------------------------------------------------------------------- #
 # War Room teams — a commander and the two consuls he would actually seat     #
 # --------------------------------------------------------------------------- #
 
@@ -1085,7 +1110,8 @@ def war_room_prompt(question: str = "") -> str:
     """The board — five commanders read the same neutral brief and diverge."""
     c = CHAMBERS["warroom"]
     council_lines = "\n\n".join(
-        f"{m['name']} ({m['dates']}) — {m['lineage']}\n{m['voice_notes']}"
+        f"{m['name']} ({m['dates']}) — {m['lineage']}\n{m['voice_notes']}\n"
+        + render_profile(m["id"], m["name"], depth="full")
         for m in c["council"]
     )
     member_names = ", ".join(f'"{m["name"]}"' for m in c["council"])
@@ -1103,6 +1129,8 @@ The voices on this board are RECONSTRUCTIONS drawn from each figure's own record
 THE BOARD:
 
 {council_lines}
+
+{FIDELITY_RULE}
 
 {WARROOM_ANALYSIS_BOUNDARY}
 

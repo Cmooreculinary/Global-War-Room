@@ -68,6 +68,22 @@ class Source(BaseModel):
     year: Optional[str] = None
 
 
+class Profile(BaseModel):
+    """A figure's character sheet — the part that makes him argue differently
+    from the other four."""
+    model_config = ConfigDict(extra="ignore")
+    formation: Optional[str] = None
+    temperament: Optional[str] = None
+    heuristics: List[str] = Field(default_factory=list)
+    signature_move: Optional[str] = None
+    reads_first: Optional[str] = None
+    blind_spots: List[str] = Field(default_factory=list)
+    breaking_point: Optional[str] = None
+    updates_when: Optional[str] = None
+    tell: Optional[str] = None
+    hard_truth: Optional[str] = None
+
+
 class Consul(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
@@ -78,6 +94,7 @@ class Consul(BaseModel):
     chosen_because: str
     voice_notes: str
     sources: Optional[List[Source]] = None
+    profile: Optional[Profile] = None
 
 
 class CouncilMember(BaseModel):
@@ -89,6 +106,7 @@ class CouncilMember(BaseModel):
     glyph: str
     voice_notes: str
     sources: Optional[List[Source]] = None
+    profile: Optional[Profile] = None
     # Only the War Room seats consuls; every other chamber leaves this empty.
     consuls: Optional[List[Consul]] = None
 

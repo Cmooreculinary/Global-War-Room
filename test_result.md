@@ -273,7 +273,59 @@ backend:
           as it lands and the client polls. Paywalled like every other
           convening.
 
+  - task: "Character sheets — the anti-convergence layer"
+    implemented: true
+    working: "NA"
+    file: "backend/profiles.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          Structured character sheets for all 15 figures, aimed squarely at the
+          risk flagged last pass: five commanders described as "brilliant"
+          converge on one competent answer. A prose biography does not fix
+          that. Each sheet carries decision rules in the figure's own terms,
+          what he notices before he has an opinion, his documented repeated
+          failure modes, what changed his mind, his tell, and a hard_truth that
+          must not be sanitised.
+
+          The blind spots are the load-bearing part and the first thing a
+          flattering portrait drops. FIDELITY_RULE instructs the model to treat
+          them as characterisation rather than warnings — explicitly forbidding
+          a figure from pre-emptively acknowledging his own blind spot and
+          correcting for it, since that is exactly what he did not do. Another
+          voice at the table names it instead.
+
+          Two render depths, because a scenario can seat 15 figures: `full` for
+          the board and single-team projections, `brief` for crowded tables,
+          chosen automatically by how many teams are seated.
+
+          Prompt sizes measured: board 5.4k tokens, projection 2.8k, scenario
+          year 2.9k (one team, full sheets) to 7.0k (five teams, brief). Input
+          tokens per scenario rose by roughly 4-5k per year-call; worth
+          watching alongside the existing cost note.
+
 frontend:
+  - task: "Character sheets in the UI"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/TeamRoster.jsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          CharacterSheet is collapsible and exported for reuse; it renders on
+          the War Room roster and on the Receipts page, where the consuls and
+          their sources now appear too. "How he fails" is shown as prominently
+          as "How he decides", and hard_truth gets its own boxed callout —
+          consistent with the app's existing claim that it does not sanitise.
+
   - task: "Team modes UI — builder, projections, scenario timeline"
     implemented: true
     working: "NA"
@@ -408,3 +460,28 @@ agent_communication:
 
       Still unverified from the first pass: live news fetching (sandbox proxy
       403s every news host) and any browser rendering.
+
+    -agent: "main"
+    -message: |
+      Third pass: character sheets, aimed at the convergence risk flagged above.
+
+      backend/tests/test_profiles_units.py — 27 tests. Beyond coverage, these
+      assert the properties that make the sheets work: no two figures notice
+      the same thing first, no decision rule is shared verbatim between two
+      figures, every leader has at least three documented failure modes, and
+      each hard_truth still contains the specific fact a flattering portrait
+      would drop (Bengal, Nishapur, Saint-Domingue, Iran/Guatemala, Tyre).
+      Also asserts the sheets actually reach the prompts, that a projection
+      prompt carries its own three figures and not the other teams', and that
+      the worst-case year prompt stays under 12k tokens before the brief.
+
+      Test ergonomics fixed: the *_backend.py integration files now skip
+      themselves when nothing is listening on :8001, instead of producing 30
+      connection errors on a plain `pytest`. Set WARROOM_REQUIRE_BACKEND=1 to
+      make that a failure in CI. Plain `pytest` is now 101 passed, 63 skipped.
+
+      The live question this pass is meant to settle, and can only be settled
+      live: run the same brief through projections before and after and see
+      whether the five futures actually diverge now. If Genghis and Eisenhower
+      still forecast the same world, the next lever is fewer figures per prompt
+      rather than more text per figure.
