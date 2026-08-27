@@ -149,6 +149,74 @@ export async function fetchWarRoomEstimate(recordId) {
   return data;
 }
 
+// ---- Team modes: projections and played-out scenarios --------------------- //
+
+export async function fetchWarRoomTeams() {
+  const { data } = await http.get(`/warroom/teams`);
+  return data; // { teams: [{ id, leader, consuls }] }
+}
+
+export async function startProjection({ briefId, topic, horizonYears = 5, teams = [] }) {
+  const { data } = await http.post(`/warroom/projection`, {
+    brief_id: briefId,
+    topic,
+    horizon_years: horizonYears,
+    teams,
+    archive_id: getArchiveId(),
+  });
+  return data; // { run_id, kind, status }
+}
+
+export async function startScenario({ briefId, topic, horizonYears = 5, assignments }) {
+  const { data } = await http.post(`/warroom/scenario`, {
+    brief_id: briefId,
+    topic,
+    horizon_years: horizonYears,
+    assignments,
+    archive_id: getArchiveId(),
+  });
+  return data; // { run_id, kind, status }
+}
+
+export async function fetchRun(runId) {
+  const { data } = await http.get(`/warroom/run/${runId}`);
+  return data;
+}
+
+/**
+ * Poll a run until it finishes. Partial results arrive on every tick — a
+ * scenario writes each year as it is played — so `onUpdate` is how the caller
+ * shows the exercise unfolding rather than a spinner. Returns a cancel fn.
+ */
+export function pollRun(runId, onUpdate, { intervalMs = 4000, onDone, onError } = {}) {
+  let cancelled = false;
+  let timer = null;
+
+  const tick = async () => {
+    if (cancelled) return;
+    try {
+      const run = await fetchRun(runId);
+      if (cancelled) return;
+      onUpdate?.(run);
+      if (run.status === "complete" || run.status === "error") {
+        if (run.status === "error") onError?.(new Error(run.error || "The run failed."));
+        else onDone?.(run);
+        return;
+      }
+    } catch (e) {
+      if (cancelled) return;
+      // A dropped poll is not fatal — the run continues server-side. Keep trying.
+    }
+    timer = setTimeout(tick, intervalMs);
+  };
+
+  tick();
+  return () => {
+    cancelled = true;
+    if (timer) clearTimeout(timer);
+  };
+}
+
 // ---- Billing API --------------------------------------------------------- //
 
 export async function fetchPlans() {
