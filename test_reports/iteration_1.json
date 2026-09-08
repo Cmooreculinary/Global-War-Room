@@ -19,7 +19,7 @@
     "Frontend CortexSVG: each lobe is a <g> with a <motion.path>. Playwright auto-click center may land outside the actual painted region for asymmetric/split lobes (boardroom, courtroom). Users clicking on the visible lobe will work, but you may want to set pointer-events explicitly on the path so the click target equals the visual area.",
     "server.py /api/deliberate persists verdict immediately even when not saved; this is intentional (so /api/verdicts/{id} can retrieve unsaved drafts), but consider TTL cleanup for unsaved drafts to keep the collection lean.",
     "No rate limiting or cost guard on /api/deliberate. Each call is a real Claude Sonnet 4.5 invocation; The Forge fires up to 6 LLM calls. Adding a per-archive_id rate limit would protect against abuse.",
-    "No tests for emergentintegrations failure modes (timeout, malformed JSON). Currently 502 is returned via chamber.error message — verified by code review only."
+    "No tests for LLM client failure modes (timeout, malformed JSON). Currently 502 is returned via chamber.error message — verified by code review only."
   ],
   "updated_files": [
     "/app/backend/tests/test_cortex_backend.py (new)",

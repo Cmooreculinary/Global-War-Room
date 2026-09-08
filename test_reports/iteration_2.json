@@ -26,7 +26,7 @@
     "/app/backend/tests/test_cortex_backend.py — added 8 new tests (/api/route x2, /api/transcribe x2, /api/speak x3, plus silent-WAV helper), fixed 2 stale assertions from iteration_1"
   ],
   "success_rate": {"backend": "100% (22/22 pytest)", "frontend": "100% (all data-testids, layout order, CTA text, convene flow, VerdictAudio, /api/speak invocation, /receipts verified)"},
-  "test_credentials": "n/a — no auth; EMERGENT_LLM_KEY in backend/.env provides Claude + OpenAI access",
+  "test_credentials": "n/a — no auth; ANTHROPIC_API_KEY and OPENAI_API_KEY in backend/.env provide Claude + OpenAI access",
   "seed_data_creation": "Backend tests create 1 Senate verdict + 1 Forge verdict under archive_id=test-archive-cortex-<8hex>. Verdicts are isolated per archive_id. No cleanup needed (archive_id is per-run UUID).",
   "retest_needed": false,
   "main_agent_can_self_test": true,
