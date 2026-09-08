@@ -264,7 +264,7 @@ export default function ForgePage() {
                 >
                   Forge another
                 </button>
-                <Link to="/" className="smallcaps text-ash hover:text-bone transition-colors ml-auto">
+                <Link to="/cortex" className="smallcaps text-ash hover:text-bone transition-colors ml-auto">
                   Return to cortex
                 </Link>
               </VerdictLayout>

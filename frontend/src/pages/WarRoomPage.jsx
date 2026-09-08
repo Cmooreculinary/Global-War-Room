@@ -471,7 +471,7 @@ export default function WarRoomPage() {
               <button onClick={onReset} className="smallcaps text-ash transition-colors hover:text-bone" data-testid="warroom-again">
                 Read another situation
               </button>
-              <Link to="/" className="smallcaps ml-auto text-ash transition-colors hover:text-bone">
+              <Link to="/cortex" className="smallcaps ml-auto text-ash transition-colors hover:text-bone">
                 Return to cortex
               </Link>
             </div>
