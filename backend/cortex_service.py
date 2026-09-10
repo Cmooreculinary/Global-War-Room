@@ -1,15 +1,13 @@
 """
 Deliberation orchestrator for Cerebral Cortex.
-Uses emergentintegrations + Claude Sonnet 4.5 for chamber and Forge deliberations.
+Uses the Anthropic SDK + Claude Sonnet 4.5 for chamber and Forge deliberations.
 """
 import json
 import logging
 import os
 import re
-import uuid
-from typing import Optional
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from anthropic import AsyncAnthropic
 
 from personas import (
     CHAMBERS,
@@ -28,28 +26,35 @@ ANTHROPIC_MODEL = "claude-sonnet-4-5-20250929"
 
 
 def _api_key() -> str:
-    key = os.environ.get("EMERGENT_LLM_KEY")
+    key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
-        raise RuntimeError("EMERGENT_LLM_KEY is not configured")
+        raise RuntimeError("ANTHROPIC_API_KEY is not configured")
     return key
 
 
 DEFAULT_MAX_TOKENS = 2500
 
 
-def _build_chat(
+def _client() -> AsyncAnthropic:
+    return AsyncAnthropic(api_key=_api_key())
+
+
+async def _ask(
     system_message: str,
-    session_id: Optional[str] = None,
+    user_text: str,
     max_tokens: int = DEFAULT_MAX_TOKENS,
-) -> LlmChat:
-    return (
-        LlmChat(
-            api_key=_api_key(),
-            session_id=session_id or str(uuid.uuid4()),
-            system_message=system_message,
-        )
-        .with_model("anthropic", ANTHROPIC_MODEL)
-        .with_params(max_tokens=max_tokens)
+) -> str:
+    """Single-turn completion against Claude, returning the plain text reply."""
+    response = await _client().messages.create(
+        model=ANTHROPIC_MODEL,
+        max_tokens=max_tokens,
+        system=system_message,
+        messages=[{"role": "user", "content": user_text}],
+    )
+    return "".join(
+        block.text
+        for block in response.content
+        if getattr(block, "type", None) == "text"
     )
 
 
@@ -72,8 +77,7 @@ async def _ask_json(
     user_text: str,
     max_tokens: int = DEFAULT_MAX_TOKENS,
 ) -> dict:
-    chat = _build_chat(system_message, max_tokens=max_tokens)
-    response = await chat.send_message(UserMessage(text=user_text))
+    response = await _ask(system_message, user_text, max_tokens=max_tokens)
     cleaned = _strip_json(response)
     try:
         return json.loads(cleaned)

@@ -14,13 +14,13 @@ A judicial-anatomical AI judgment system modeled on the human brain. Five chambe
 ## Architecture
 - **Frontend:** React 19 + Tailwind + Framer Motion + shadcn/ui + sonner. Routes: `/`, `/chamber/{id}`, `/forge`, `/verdict/:id`, `/archive`, `/about`.
 - **Backend:** FastAPI on `:8001`, all routes prefixed `/api`. MongoDB `verdicts` collection.
-- **AI:** Anthropic `claude-sonnet-4-5-20250929` via emergentintegrations + EMERGENT_LLM_KEY. Single-call multi-persona for chambers; multi-call witness-and-synthesize for The Forge.
+- **AI:** Anthropic `claude-sonnet-4-5-20250929` via the Anthropic SDK + ANTHROPIC_API_KEY (voice via the OpenAI SDK + OPENAI_API_KEY). Single-call multi-persona for chambers; multi-call witness-and-synthesize for The Forge.
 
 ## Decisions (v1)
 - Council = **named real figures, reconstructed from the public record** (v2 pivot from archetypes — Feb 2026).
 - Council member representation = **symbolic SVG glyphs**, not photoreal portraits.
 - Persistence = **MongoDB** (per-browser archive_id from localStorage).
-- LLM provider = **Emergent Universal LLM Key** (Claude Sonnet 4.5).
+- LLM provider = **Anthropic API** (Claude Sonnet 4.5); voice via the **OpenAI API**.
 
 ## The Councils (v2 — Feb 2026)
 - **Senate**: Abraham Lincoln, Winston Churchill, Marcus Aurelius, Edmund Burke

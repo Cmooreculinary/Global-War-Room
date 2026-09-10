@@ -1,10 +1,9 @@
 """Test bootstrap.
 
 The backend modules import each other flat (`from personas import …`), so the
-backend directory has to be importable. `emergentintegrations` is the hosted LLM
-client and is not installable in a bare test environment, so it is stubbed here
-— the unit tests exercise gathering, sifting and normalisation, none of which
-should ever need a live model.
+backend directory has to be importable. `anthropic` is the LLM client; it is
+stubbed here so the unit tests never reach a live model — they exercise
+gathering, sifting and normalisation, none of which should ever need one.
 """
 import os
 import socket
@@ -25,43 +24,24 @@ BACKEND_HOST, BACKEND_PORT = "localhost", 8001
 
 
 def _install_llm_stub():
-    if "emergentintegrations" in sys.modules:
+    if "anthropic" in sys.modules:
         return
 
-    class _StubChat:
-        """Mirrors the fluent surface cortex_service builds against."""
-
-        def __init__(self, **kwargs):
-            self.kwargs = kwargs
-            self.params = {}
-
-        def with_model(self, *_args, **_kwargs):
-            return self
-
-        def with_params(self, **params):
-            self.params.update(params)
-            return self
-
-        async def send_message(self, _message):
+    class _StubMessages:
+        async def create(self, *_args, **_kwargs):
             raise AssertionError(
                 "A unit test reached the live model. Stub the call under test instead."
             )
 
-    class _StubUserMessage:
-        def __init__(self, text=""):
-            self.text = text
+    class _StubAsyncAnthropic:
+        """Mirrors the surface cortex_service builds against."""
 
-    root = types.ModuleType("emergentintegrations")
-    llm = types.ModuleType("emergentintegrations.llm")
-    chat = types.ModuleType("emergentintegrations.llm.chat")
-    chat.LlmChat = _StubChat
-    chat.UserMessage = _StubUserMessage
-    llm.chat = chat
-    root.llm = llm
+        def __init__(self, *_args, **_kwargs):
+            self.messages = _StubMessages()
 
-    sys.modules["emergentintegrations"] = root
-    sys.modules["emergentintegrations.llm"] = llm
-    sys.modules["emergentintegrations.llm.chat"] = chat
+    root = types.ModuleType("anthropic")
+    root.AsyncAnthropic = _StubAsyncAnthropic
+    sys.modules["anthropic"] = root
 
 
 _install_llm_stub()
