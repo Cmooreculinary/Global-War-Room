@@ -56,7 +56,7 @@ export default function ArchivePage() {
               When you save a verdict, it will be kept here.
             </p>
             <Link
-              to="/"
+              to="/cortex"
               className="cortex-ui mt-7 inline-block border border-slate px-5 py-2.5 text-sm text-bone hover:border-bone/40 transition-colors"
               data-testid="archive-empty-cta"
             >

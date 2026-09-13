@@ -1,6 +1,6 @@
 """
 Deliberation orchestrator for Cerebral Cortex.
-Uses Anthropic Claude Sonnet 4.5 for chamber and Forge deliberations.
+Uses the Anthropic SDK + Claude Sonnet 4.5 for chamber and Forge deliberations.
 """
 import json
 import logging
@@ -23,9 +23,6 @@ from personas import (
 logger = logging.getLogger(__name__)
 
 ANTHROPIC_MODEL = "claude-sonnet-4-5-20250929"
-DEFAULT_MAX_TOKENS = 2500
-
-_client: AsyncAnthropic | None = None
 
 
 def _api_key() -> str:
@@ -35,22 +32,30 @@ def _api_key() -> str:
     return key
 
 
-def _anthropic() -> AsyncAnthropic:
-    global _client
-    if _client is None:
-        _client = AsyncAnthropic(api_key=_api_key())
-    return _client
+DEFAULT_MAX_TOKENS = 2500
 
 
-async def _complete(system_message: str, user_text: str, max_tokens: int) -> str:
-    message = await _anthropic().messages.create(
+def _client() -> AsyncAnthropic:
+    return AsyncAnthropic(api_key=_api_key())
+
+
+async def _ask(
+    system_message: str,
+    user_text: str,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+) -> str:
+    """Single-turn completion against Claude, returning the plain text reply."""
+    response = await _client().messages.create(
         model=ANTHROPIC_MODEL,
         max_tokens=max_tokens,
         system=system_message,
         messages=[{"role": "user", "content": user_text}],
     )
-    parts = [block.text for block in message.content if getattr(block, "type", None) == "text"]
-    return "".join(parts)
+    return "".join(
+        block.text
+        for block in response.content
+        if getattr(block, "type", None) == "text"
+    )
 
 
 def _strip_json(raw: str) -> str:
@@ -72,7 +77,7 @@ async def _ask_json(
     user_text: str,
     max_tokens: int = DEFAULT_MAX_TOKENS,
 ) -> dict:
-    response = await _complete(system_message, user_text, max_tokens=max_tokens)
+    response = await _ask(system_message, user_text, max_tokens=max_tokens)
     cleaned = _strip_json(response)
     try:
         return json.loads(cleaned)

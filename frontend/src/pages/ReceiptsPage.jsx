@@ -96,7 +96,7 @@ export default function ReceiptsPage() {
             {/* Closing CTA */}
             <div className="mt-12 flex flex-wrap items-center gap-4">
               <Link
-                to="/"
+                to="/cortex"
                 className="cortex-ui inline-flex items-center gap-2 border px-5 py-2.5 text-sm transition-colors"
                 style={{ borderColor: "#C9A961", color: "#F5F2EC" }}
                 data-testid="receipts-cta-cortex"

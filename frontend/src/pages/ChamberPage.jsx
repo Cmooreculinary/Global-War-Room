@@ -45,7 +45,7 @@ export default function ChamberPage() {
       <Layout>
         <div className="mx-auto max-w-4xl px-6 py-20 md:px-10">
           <p className="cortex-display text-3xl text-pearl">Unknown chamber.</p>
-          <Link to="/" className="smallcaps mt-6 inline-block text-ash hover:text-bone">
+          <Link to="/cortex" className="smallcaps mt-6 inline-block text-ash hover:text-bone">
             Return to the cortex
           </Link>
         </div>
@@ -233,7 +233,7 @@ export default function ChamberPage() {
                 >
                   Ask again
                 </button>
-                <Link to="/" className="smallcaps text-ash hover:text-bone transition-colors ml-auto">
+                <Link to="/cortex" className="smallcaps text-ash hover:text-bone transition-colors ml-auto">
                   Return to cortex
                 </Link>
               </VerdictLayout>

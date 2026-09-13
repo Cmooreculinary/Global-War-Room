@@ -25,22 +25,22 @@ export const Layout = ({ children, accentChamber = null }) => {
             className="group flex items-center gap-3"
             data-testid="header-home-link"
           >
-            <CortexMark color={accent?.accent || "#C9A961"} />
+            <CortexMark color={accent?.accent || "#D6C08A"} />
             <div className="leading-tight">
               <div
                 className="cortex-display text-[1.05rem] tracking-tight text-pearl"
                 style={{ fontWeight: 600 }}
               >
-                Cerebral Cortex
+                Global War Room
               </div>
-              <div className="smallcaps text-ash">A whole mind at work</div>
+              <div className="smallcaps text-ash">Five commanders, one brief</div>
             </div>
           </Link>
 
           <nav className="hidden items-center gap-7 md:flex">
-            <NavLink to="/" label="Cortex" current={location.pathname === "/"} testid="nav-cortex" />
+            <NavLink to="/" label="War Room" current={location.pathname === "/"} testid="nav-warroom" />
+            <NavLink to="/cortex" label="Cortex" current={location.pathname.startsWith("/cortex")} testid="nav-cortex" />
             <NavLink to="/forge" label="The Forge" current={location.pathname.startsWith("/forge")} testid="nav-forge" />
-            <NavLink to="/warroom" label="War Room" current={location.pathname.startsWith("/warroom")} testid="nav-warroom" />
             <NavLink to="/receipts" label="Receipts" current={location.pathname.startsWith("/receipts")} testid="nav-receipts" />
             <NavLink to="/archive" label="Archive" current={location.pathname.startsWith("/archive")} testid="nav-archive" />
             <NavLink to="/about" label="About" current={location.pathname.startsWith("/about")} testid="nav-about" />
@@ -58,6 +58,8 @@ export const Layout = ({ children, accentChamber = null }) => {
               Real wisdom is never one voice.
             </p>
             <div className="flex flex-wrap items-center gap-x-7 gap-y-3 smallcaps text-ash">
+              <span style={{ color: "#D6C08A" }}>War Room</span>
+              <span className="text-slate">·</span>
               <span>Senate</span>
               <span className="text-slate">·</span>
               <span>Boardroom</span>
@@ -67,8 +69,6 @@ export const Layout = ({ children, accentChamber = null }) => {
               <span>Council</span>
               <span className="text-slate">·</span>
               <span style={{ color: "#FFE5B4" }}>Forge</span>
-              <span className="text-slate">·</span>
-              <span style={{ color: "#D6C08A" }}>War Room</span>
             </div>
           </div>
         </div>

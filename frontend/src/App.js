@@ -34,12 +34,13 @@ function App() {
           }}
         />
         <Routes>
-          <Route path="/" element={<SplashLanding />} />
+          <Route path="/" element={<WarRoomPage />} />
+          <Route path="/warroom" element={<Navigate to="/" replace />} />
+          <Route path="/welcome" element={<SplashLanding />} />
           <Route path="/cortex" element={<Landing />} />
           <Route path="/court/:sessionId" element={<CourtPage />} />
           <Route path="/forge" element={<ForgePage />} />
-          <Route path="/warroom" element={<WarRoomPage />} />
-          <Route path="/chamber/warroom" element={<Navigate to="/warroom" replace />} />
+          <Route path="/chamber/warroom" element={<Navigate to="/" replace />} />
           <Route path="/chamber/:id" element={<ChamberPage />} />
           <Route path="/chamber/forge" element={<Navigate to="/forge" replace />} />
           <Route path="/verdict/:id" element={<VerdictPage />} />

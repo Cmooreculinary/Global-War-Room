@@ -1,12 +1,14 @@
 """Test bootstrap.
 
 The backend modules import each other flat (`from personas import …`), so the
-backend directory has to be importable. Unit tests exercise gathering, sifting
-and normalisation; they stub `_ask_json` and must never need a live model.
+backend directory has to be importable. `anthropic` is the LLM client; it is
+stubbed here so the unit tests never reach a live model — they exercise
+gathering, sifting and normalisation, none of which should ever need one.
 """
 import os
 import socket
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -19,6 +21,30 @@ if str(BACKEND_DIR) not in sys.path:
 # test that must pass with no server and no model.
 INTEGRATION_SUFFIX = "_backend.py"
 BACKEND_HOST, BACKEND_PORT = "localhost", 8001
+
+
+def _install_llm_stub():
+    if "anthropic" in sys.modules:
+        return
+
+    class _StubMessages:
+        async def create(self, *_args, **_kwargs):
+            raise AssertionError(
+                "A unit test reached the live model. Stub the call under test instead."
+            )
+
+    class _StubAsyncAnthropic:
+        """Mirrors the surface cortex_service builds against."""
+
+        def __init__(self, *_args, **_kwargs):
+            self.messages = _StubMessages()
+
+    root = types.ModuleType("anthropic")
+    root.AsyncAnthropic = _StubAsyncAnthropic
+    sys.modules["anthropic"] = root
+
+
+_install_llm_stub()
 
 
 def _backend_is_up() -> bool:
