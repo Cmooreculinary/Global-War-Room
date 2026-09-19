@@ -8,10 +8,12 @@ React build (frontend/build) with SPA fallback so client-side routes like
 """
 from pathlib import Path
 
+from fastapi import HTTPException
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
 
 from server import app  # noqa: E402  (registers all /api routes on import)
+from spa_paths import resolved_spa_file
 
 BUILD_DIR = Path(__file__).resolve().parent.parent / "frontend" / "build"
 
@@ -24,8 +26,10 @@ app.mount(
 
 @app.get("/{full_path:path}")
 async def spa_fallback(full_path: str):
-    # /api routes are registered before this catch-all, so they take precedence.
-    candidate = BUILD_DIR / full_path
-    if full_path and candidate.is_file():
+    # Unknown /api paths must not collapse to index.html (status 200).
+    if full_path == "api" or full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="Not found")
+    candidate = resolved_spa_file(BUILD_DIR, full_path)
+    if candidate is not None:
         return FileResponse(candidate)
     return FileResponse(BUILD_DIR / "index.html")

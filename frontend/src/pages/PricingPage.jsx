@@ -1,5 +1,5 @@
 // PricingPage — the single membership offer.
-// 5 free verdicts, then $10/month for unlimited.
+// 5 free verdicts, then $15 once for lifetime unlimited.
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -43,7 +43,9 @@ export default function PricingPage() {
     }
   };
 
-  const monthly = plans.find((p) => p.id === "membership_monthly");
+  const lifetime =
+    plans.find((p) => p.id === "membership_lifetime" || p.cadence === "lifetime") ||
+    plans.find((p) => p.id === "membership_monthly");
 
   return (
     <Layout>
@@ -114,7 +116,7 @@ export default function PricingPage() {
             </motion.div>
 
             {/* Membership card — featured */}
-            {monthly && (
+            {lifetime && (
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -139,25 +141,25 @@ export default function PricingPage() {
                   RECOMMENDED
                 </span>
                 <p className="smallcaps" style={{ color: "#C9A961" }}>
-                  {monthly.label}
+                  {lifetime.label}
                 </p>
                 <p className="cortex-display mt-2 text-pearl" style={{ fontWeight: 600 }}>
-                  <span className="text-4xl">${monthly.price_usd.toFixed(0)}</span>
+                  <span className="text-4xl">${lifetime.price_usd.toFixed(0)}</span>
                   <span className="cortex-editorial italic ml-2 text-base text-bone/70">
-                    / month
+                    once
                   </span>
                 </p>
                 <p className="cortex-editorial mt-1 text-sm text-bone/70">
-                  {monthly.blurb}
+                  {lifetime.blurb}
                 </p>
                 <ul className="cortex-editorial mt-6 space-y-2 text-bone/90">
                   <Bullet glow>Unlimited verdicts.</Bullet>
                   <Bullet glow>Convene a court — invite witnesses.</Bullet>
                   <Bullet glow>The full bench, every chamber.</Bullet>
-                  <Bullet glow>Cancel anytime, with no script.</Bullet>
+                  <Bullet glow>One payment. Yours for life.</Bullet>
                 </ul>
                 <button
-                  onClick={() => onSubscribe(monthly.id)}
+                  onClick={() => onSubscribe(lifetime.id)}
                   disabled={loading}
                   className="mt-7 inline-flex w-full items-center justify-center gap-3 border px-6 py-3.5 transition-all duration-300 disabled:opacity-50"
                   style={{

@@ -121,6 +121,7 @@ def brief(http):
         "topic": "border deployment between Country A and Country B",
         "pasted": PASTED,
         "live": False,
+        "archive_id": ARCHIVE_ID,
     }, timeout=240)
     if r.status_code != 200:
         pytest.fail(f"brief failed: {r.status_code} {r.text[:400]}")

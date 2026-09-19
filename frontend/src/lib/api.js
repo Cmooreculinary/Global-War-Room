@@ -129,7 +129,14 @@ export async function fetchWarRoomSources() {
 export async function buildWarRoomBrief({ topic, pasted = "", live = true, windowHours = 24, includeState = false }) {
   const { data } = await http.post(
     `/warroom/brief`,
-    { topic, pasted, live, window_hours: windowHours, include_state: includeState },
+    {
+      topic,
+      pasted,
+      live,
+      window_hours: windowHours,
+      include_state: includeState,
+      archive_id: getArchiveId(),
+    },
     { timeout: 180000 }
   );
   return data; // { id, topic, brief, sources, items }

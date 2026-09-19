@@ -3,7 +3,7 @@
 Pricing v1:
   - 5 free verdicts per archive_id (lifetime, not per month — keeps it simple
     until accounts land; we can prorate on account merge later).
-  - $10/month membership unlocks unlimited verdicts.
+  - $15 one-time lifetime membership unlocks unlimited verdicts.
 
 Identity: the existing per-browser archive_id is treated as the user
 identifier. When Google sign-in lands later, we'll map the archive_id onto
@@ -17,6 +17,7 @@ import asyncio
 import os
 from dataclasses import dataclass, field
 from typing import Optional
+from urllib.parse import urlparse
 
 import stripe
 
@@ -24,23 +25,79 @@ import stripe
 
 FREE_VERDICT_LIMIT = 5
 
+_LIFETIME = {
+    "id": "membership_lifetime",
+    "label": "Lifetime membership",
+    "price_usd": 15.00,
+    "currency": "usd",
+    "cadence": "lifetime",
+    "blurb": "Pay once. Unlimited verdicts, courts, and the full bench — forever.",
+}
+
 PLANS = {
-    "membership_monthly": {
-        "id": "membership_monthly",
-        "label": "Cortex Membership",
-        "price_usd": 10.00,
-        "currency": "usd",
-        "cadence": "monthly",
-        "blurb": "Unlimited verdicts. Court sessions. The full bench.",
-    },
+    "membership_lifetime": _LIFETIME,
+    # Older clients and existing Mongo rows still send this id.
+    "membership_monthly": {**_LIFETIME, "id": "membership_monthly"},
 }
 
 # Product name shown on the Stripe-hosted checkout page.
-CHECKOUT_PRODUCT_NAME = "Cerebral Cortex Membership"
+CHECKOUT_PRODUCT_NAME = "Global War Room Lifetime Membership"
 
 
 def get_plan(plan_id: str) -> Optional[dict]:
     return PLANS.get(plan_id)
+
+
+def public_plans() -> list:
+    """Plans advertised to the client — one lifetime offer."""
+    return [_LIFETIME]
+
+
+def _normalize_origin(url: str) -> Optional[str]:
+    parsed = urlparse((url or "").strip())
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return None
+    if parsed.username or parsed.password:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _origin_allowlist() -> list[str]:
+    raw = os.environ.get("CHECKOUT_ORIGINS") or os.environ.get("CORS_ORIGINS", "")
+    return [o.strip().rstrip("/") for o in raw.split(",") if o.strip() and o.strip() != "*"]
+
+
+def resolve_checkout_origin(requested: str, request_origin: Optional[str] = None) -> str:
+    """Pick a Stripe redirect origin the server is willing to send buyers to.
+
+    Order: PUBLIC_BASE_URL (authoritative), then an allow-listed requested /
+    Origin header. A wildcard CORS list only permits localhost, so a caller
+    cannot mint checkout that returns to an arbitrary phishing host.
+    """
+    public = _normalize_origin(os.environ.get("PUBLIC_BASE_URL", ""))
+    if public:
+        return public
+
+    requested_n = _normalize_origin(requested)
+    header_n = _normalize_origin(request_origin or "")
+    allowed = _origin_allowlist()
+
+    if allowed:
+        if requested_n and requested_n in allowed:
+            return requested_n
+        if header_n and header_n in allowed:
+            return header_n
+        raise ValueError("Checkout origin is not allow-listed")
+
+    for candidate in (requested_n, header_n):
+        if candidate and (
+            candidate.startswith("http://localhost")
+            or candidate.startswith("https://localhost")
+            or candidate.startswith("http://127.0.0.1")
+            or candidate.startswith("https://127.0.0.1")
+        ):
+            return candidate
+    raise ValueError("Checkout origin is not allow-listed")
 
 
 # --------------------------------------------------------------------------- #
@@ -155,14 +212,16 @@ async def create_membership_checkout(
     archive_id: str,
     origin_url: str,
     webhook_url: str,
+    request_origin: Optional[str] = None,
 ) -> CheckoutSessionResponse:
     """Create a Stripe Checkout Session for a fixed plan."""
     plan = get_plan(plan_id)
     if plan is None:
         raise ValueError(f"Unknown plan: {plan_id}")
 
-    success_url = f"{origin_url}/billing/success?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"{origin_url}/pricing"
+    origin = resolve_checkout_origin(origin_url, request_origin)
+    success_url = f"{origin}/billing/success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{origin}/pricing"
 
     sc = stripe_client(webhook_url)
     req = CheckoutSessionRequest(

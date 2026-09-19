@@ -20,6 +20,7 @@ import VerdictAudio from "@/components/VerdictAudio";
 import { CHAMBER_THEME } from "@/lib/chambers";
 import { CONVENING_MESSAGES, getChamberMessages } from "@/lib/loadingMessages";
 import { deliberate, fetchChamber, routeQuestion, saveVerdict, createCourtSession, fetchEntitlement } from "@/lib/api";
+import { saveCourtSeat } from "@/lib/storage";
 import PaywallModal from "@/components/PaywallModal";
 
 const PHASES = {
@@ -165,7 +166,15 @@ export default function Landing() {
     if (!q || conveningCourt) return;
     setConveningCourt(true);
     try {
-      const { session_id } = await createCourtSession({ question: q, hostName: "Host" });
+      const { session_id, host_attendee_id } = await createCourtSession({
+        question: q,
+        hostName: "Host",
+      });
+      saveCourtSeat(session_id, {
+        attendeeId: host_attendee_id,
+        name: "Host",
+        isHost: true,
+      });
       navigate(`/court/${session_id}`);
     } catch (e) {
       const status = e?.response?.status;

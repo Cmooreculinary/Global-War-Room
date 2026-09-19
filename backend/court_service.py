@@ -1,6 +1,5 @@
 """Court session orchestration — invite-witness courtroom flow."""
 import logging
-from typing import Optional
 
 from cortex_service import (
     _ask_json,
@@ -92,11 +91,49 @@ def make_share_path(session_id: str) -> str:
     return f"/court/{session_id}"
 
 
+_PUBLIC_SESSION_KEYS = (
+    "id",
+    "question",
+    "chamber_id",
+    "witnesses_called",
+    "panel",
+    "reasoning",
+    "status",
+    "deliberation",
+    "verdict",
+    "amended_verdict",
+    "amendment_ruling",
+    "amendment_concession",
+    "committee",
+    "created_at",
+    "updated_at",
+)
+
+
 def public_session(session: dict) -> dict:
-    """Strip the session for public clients (drop _id, host markers, etc.)."""
-    if not session:
+    """Project a court session for public clients.
+
+    Drops Mongo `_id`, the host's archive_id, and every attendee id. Those
+    ids are the only authorization secret for begin / object / close — they
+    must not travel with the share link.
+    """
+    if session is None:
         return session
-    out = {k: v for k, v in session.items() if k != "_id"}
+    out = {k: session[k] for k in _PUBLIC_SESSION_KEYS if k in session}
+    out["attendees"] = [
+        {"name": (a.get("name") or ""), "is_host": bool(a.get("is_host"))}
+        for a in (session.get("attendees") or [])
+        if isinstance(a, dict)
+    ]
+    objection = session.get("objection")
+    if isinstance(objection, dict):
+        out["objection"] = {
+            "by_name": objection.get("by_name"),
+            "content": objection.get("content"),
+            "created_at": objection.get("created_at"),
+        }
+    else:
+        out["objection"] = None
     return out
 
 

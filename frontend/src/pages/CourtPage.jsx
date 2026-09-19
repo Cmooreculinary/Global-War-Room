@@ -7,7 +7,7 @@
 // URL: /court/:sessionId
 //
 // Polling-based; no websockets. The session document carries all state.
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -56,13 +56,10 @@ export default function CourtPage() {
     };
   }, [sessionId]);
 
-  const isHost = !!seat?.isHost && session?.attendees?.some(
-    (a) => a.id === seat.attendeeId && a.is_host
-  );
-  const myAttendee = useMemo(
-    () => session?.attendees?.find((a) => a.id === seat?.attendeeId) || null,
-    [session, seat]
-  );
+  // Attendee ids are not returned on the public session. The host seat is
+  // written to localStorage at create time; witnesses get theirs from /join.
+  const isHost = !!seat?.isHost;
+  const myName = seat?.name || "";
 
   // Handle joining the court
   const handleJoin = useCallback(async (name) => {
@@ -147,7 +144,7 @@ export default function CourtPage() {
       <div className="relative mx-auto max-w-7xl px-4 pb-32 pt-12 md:px-8 md:pt-16">
         <CaseHeader session={session} />
         <Bench session={session} />
-        <Gallery session={session} myAttendeeId={myAttendee?.id} />
+        <Gallery session={session} myName={myName} isHost={isHost} />
 
         <SessionStage
           session={session}
@@ -348,34 +345,38 @@ function currentlySpeakingMember(session) {
 // Gallery — the seats for human witnesses                                     //
 // --------------------------------------------------------------------------- //
 
-function Gallery({ session, myAttendeeId }) {
+function Gallery({ session, myName, isHost }) {
   const t = CHAMBER_THEME[session.chamber_id] || CHAMBER_THEME.senate;
   const attendees = session.attendees || [];
   return (
     <section className="mt-14" data-testid="court-gallery">
       <p className="smallcaps text-center text-ash mb-5">The gallery</p>
       <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-center gap-3">
-        {attendees.map((a) => (
-          <div
-            key={a.id}
-            className="cortex-ui inline-flex items-center gap-2 border px-3 py-2 text-sm"
-            style={{
-              borderColor: a.id === myAttendeeId ? t.accent : "#2A2A36",
-              borderRadius: 2,
-              color: a.is_host ? t.accent : "#F5F2EC",
-              background: a.id === myAttendeeId ? `${t.primary}1A` : "rgba(20,20,28,0.7)",
-            }}
-            data-testid={`attendee-${a.id}`}
-          >
-            <span
-              className="inline-block h-2 w-2 rounded-full"
-              style={{ background: a.is_host ? t.accent : "#6B6B78" }}
-            />
-            {a.name}
-            {a.is_host && <span className="smallcaps ml-1 text-xs">Host</span>}
-            {a.id === myAttendeeId && !a.is_host && <span className="smallcaps ml-1 text-xs">You</span>}
-          </div>
-        ))}
+        {attendees.map((a, idx) => {
+          const isMe = isHost ? !!a.is_host : !a.is_host && a.name === myName;
+          const key = `${a.name || "guest"}-${idx}`;
+          return (
+            <div
+              key={key}
+              className="cortex-ui inline-flex items-center gap-2 border px-3 py-2 text-sm"
+              style={{
+                borderColor: isMe ? t.accent : "#2A2A36",
+                borderRadius: 2,
+                color: a.is_host ? t.accent : "#F5F2EC",
+                background: isMe ? `${t.primary}1A` : "rgba(20,20,28,0.7)",
+              }}
+              data-testid={`attendee-${key}`}
+            >
+              <span
+                className="inline-block h-2 w-2 rounded-full"
+                style={{ background: a.is_host ? t.accent : "#6B6B78" }}
+              />
+              {a.name}
+              {a.is_host && <span className="smallcaps ml-1 text-xs">Host</span>}
+              {isMe && !a.is_host && <span className="smallcaps ml-1 text-xs">You</span>}
+            </div>
+          );
+        })}
       </div>
     </section>
   );

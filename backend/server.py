@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, BackgroundTasks, FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, ConfigDict, Field
@@ -27,10 +27,18 @@ from court_service import (  # noqa: E402
 )
 from billing import (  # noqa: E402
     FREE_VERDICT_LIMIT,
-    PLANS,
     create_membership_checkout,
     get_plan,
+    public_plans,
     stripe_client,
+)
+from limits import (  # noqa: E402
+    BRIEF,
+    HEAVY,
+    ROUTE,
+    VOICE,
+    rate_limit,
+    require_archive_id,
 )
 from personas import CHAMBERS, RECONSTRUCTION_DISCLAIMER, team_ids, war_room_teams  # noqa: E402
 from intel import LIVE_ENABLED, RSS_FEEDS, STATE_FEEDS  # noqa: E402
@@ -211,6 +219,7 @@ class WarRoomBriefRequest(BaseModel):
     live: bool = True
     window_hours: int = Field(default=24, ge=1, le=168)
     include_state: bool = False
+    archive_id: Optional[str] = None
 
 
 class WarRoomBriefResponse(BaseModel):
@@ -350,7 +359,7 @@ async def get_personas():
 
 
 @api_router.post("/route", response_model=RouteResponse)
-async def route(req: RouteRequest):
+async def route(req: RouteRequest, _: None = Depends(rate_limit(ROUTE))):
     """Pre-deliberation routing: which chamber should chair this question?"""
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="Question is required")
@@ -359,7 +368,7 @@ async def route(req: RouteRequest):
 
 
 @api_router.post("/transcribe", response_model=TranscribeResponse)
-async def transcribe(audio: UploadFile = File(...)):
+async def transcribe(audio: UploadFile = File(...), _: None = Depends(rate_limit(VOICE))):
     """Transcribe an uploaded audio file (webm/mp3/wav/m4a) to plain text via Whisper."""
     if not audio.filename:
         raise HTTPException(status_code=400, detail="No audio file provided")
@@ -372,7 +381,7 @@ async def transcribe(audio: UploadFile = File(...)):
 
 
 @api_router.post("/speak")
-async def speak(req: SpeakRequest):
+async def speak(req: SpeakRequest, _: None = Depends(rate_limit(VOICE))):
     """Render text as MP3 audio in the chamber's voice."""
     voice = req.voice or voice_for_chamber(req.chamber_id)
     try:
@@ -393,7 +402,7 @@ async def speak(req: SpeakRequest):
 
 
 @api_router.post("/deliberate", response_model=Verdict)
-async def deliberate(req: DeliberateRequest):
+async def deliberate(req: DeliberateRequest, _: None = Depends(rate_limit(HEAVY))):
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="Question is required")
     if req.chamber_id not in CHAMBERS:
@@ -457,6 +466,9 @@ async def save_verdict(verdict_id: str, req: SaveRequest):
     doc = await db.verdicts.find_one({"id": verdict_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Verdict not found")
+    existing = doc.get("archive_id")
+    if existing and existing != req.archive_id:
+        raise HTTPException(status_code=403, detail="This verdict belongs to another archive")
     await db.verdicts.update_one(
         {"id": verdict_id},
         {"$set": {"saved": True, "archive_id": req.archive_id}},
@@ -495,7 +507,7 @@ async def list_archive(archive_id: str = Query(...)):
 
 
 # --------------------------------------------------------------------------- #
-# Billing — Stripe membership ($10/month, 5 free verdicts before paywall)     #
+# Billing — Stripe lifetime membership ($15 once, 5 free verdicts before paywall) #
 # --------------------------------------------------------------------------- #
 
 async def _is_active_member(archive_id: Optional[str]) -> tuple[bool, Optional[str]]:
@@ -517,13 +529,12 @@ async def _free_verdicts_used(archive_id: Optional[str]) -> int:
 
 
 async def _enforce_paywall(archive_id: Optional[str]) -> None:
-    """Raise 402 once a non-member browser session is out of free verdicts.
+    """Raise 401 without a session; 402 once a non-member is out of free verdicts.
 
-    Only enforced when an archive_id is present — anonymous API callers with no
-    browser session are not metered.
+    Anonymous callers are no longer exempt. The first-party client always sends
+    an archive_id; omitting it was the unlimited-LLM bypass.
     """
-    if not archive_id:
-        return
+    archive_id = require_archive_id(archive_id)
     is_member, _ = await _is_active_member(archive_id)
     if is_member:
         return
@@ -553,7 +564,7 @@ async def _entitlement(archive_id: Optional[str]) -> EntitlementResponse:
 
 @api_router.get("/billing/plans")
 async def list_plans():
-    return {"plans": list(PLANS.values()), "free_limit": FREE_VERDICT_LIMIT}
+    return {"plans": public_plans(), "free_limit": FREE_VERDICT_LIMIT}
 
 
 @api_router.get("/billing/me", response_model=EntitlementResponse)
@@ -573,7 +584,10 @@ async def billing_checkout(req: CheckoutCreateRequest, http_request: Request):
             archive_id=req.archive_id,
             origin_url=req.origin_url.rstrip("/"),
             webhook_url=webhook_url,
+            request_origin=http_request.headers.get("origin"),
         )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.exception("Stripe checkout creation failed")
         raise HTTPException(status_code=502, detail="Could not start checkout") from e
@@ -726,7 +740,7 @@ async def warroom_sources():
 
 
 @api_router.post("/warroom/brief", response_model=WarRoomBriefResponse)
-async def warroom_brief(req: WarRoomBriefRequest):
+async def warroom_brief(req: WarRoomBriefRequest, _: None = Depends(rate_limit(BRIEF))):
     """Pass one: gather today's coverage and sift it into a neutral fact sheet.
 
     Returned before the board sees it, so the facts can be reviewed — and
@@ -735,6 +749,7 @@ async def warroom_brief(req: WarRoomBriefRequest):
     topic = req.topic.strip()
     if not topic:
         raise HTTPException(status_code=400, detail="A topic is required")
+    await _enforce_paywall(req.archive_id)
 
     try:
         gathered = await build_brief(
@@ -761,7 +776,7 @@ async def warroom_brief(req: WarRoomBriefRequest):
 
 
 @api_router.post("/warroom/convene", response_model=WarRoomEstimateResponse)
-async def warroom_convene(req: WarRoomConveneRequest):
+async def warroom_convene(req: WarRoomConveneRequest, _: None = Depends(rate_limit(HEAVY))):
     """Pass two and three: the board reads the brief, then the estimate is drawn.
 
     Pass a brief_id to reuse a fact sheet the user has already seen; pass a
@@ -953,7 +968,11 @@ async def warroom_teams():
 
 
 @api_router.post("/warroom/projection", status_code=202, response_model=RunAccepted)
-async def warroom_projection(req: ProjectionRequest, background_tasks: BackgroundTasks):
+async def warroom_projection(
+    req: ProjectionRequest,
+    background_tasks: BackgroundTasks,
+    _: None = Depends(rate_limit(HEAVY)),
+):
     """Every team forecasts the horizon; the forecasts are then read against
     each other. Runs in the background — poll /warroom/run/{id}."""
     await _enforce_paywall(req.archive_id)
@@ -971,7 +990,11 @@ async def warroom_projection(req: ProjectionRequest, background_tasks: Backgroun
 
 
 @api_router.post("/warroom/scenario", status_code=202, response_model=RunAccepted)
-async def warroom_scenario(req: ScenarioRequest, background_tasks: BackgroundTasks):
+async def warroom_scenario(
+    req: ScenarioRequest,
+    background_tasks: BackgroundTasks,
+    _: None = Depends(rate_limit(HEAVY)),
+):
     """Play the horizon out year by year.
 
     One actor with every team advising it, or several actors with the teams
@@ -1119,7 +1142,7 @@ async def _run_court_amendment(session_id: str, objector_name: str, content: str
 
 
 @api_router.post("/court/create")
-async def court_create(req: CourtCreateRequest):
+async def court_create(req: CourtCreateRequest, _: None = Depends(rate_limit(HEAVY))):
     """Create a new court session. Routes the question, freezes the panel, returns share link."""
     q = req.question.strip()
     if not q:
@@ -1282,7 +1305,9 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_origins=[
+        o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
