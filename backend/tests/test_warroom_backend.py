@@ -98,13 +98,26 @@ def test_brief_requires_a_topic(http):
 
 
 def test_convene_requires_a_topic_or_brief(http):
-    r = http.post(f"{API}/warroom/convene", json={"question": "what next?"}, timeout=20)
+    r = http.post(
+        f"{API}/warroom/convene",
+        json={"question": "what next?", "archive_id": ARCHIVE_ID},
+        timeout=20,
+    )
     assert r.status_code == 400
 
 
 def test_convene_unknown_brief_404(http):
-    r = http.post(f"{API}/warroom/convene", json={"brief_id": "no-such-brief"}, timeout=20)
+    r = http.post(
+        f"{API}/warroom/convene",
+        json={"brief_id": "no-such-brief", "archive_id": ARCHIVE_ID},
+        timeout=20,
+    )
     assert r.status_code == 404
+
+
+def test_convene_without_session_is_rejected(http):
+    r = http.post(f"{API}/warroom/convene", json={"topic": "x", "question": "y"}, timeout=20)
+    assert r.status_code == 401
 
 
 def test_estimate_unknown_id_404(http):
@@ -116,7 +129,12 @@ def test_estimate_unknown_id_404(http):
 
 @pytest.fixture(scope="module")
 def brief(http):
-    payload = {"topic": "border deployment between Country A and Country B", "pasted": PASTED, "live": False}
+    payload = {
+        "topic": "border deployment between Country A and Country B",
+        "pasted": PASTED,
+        "live": False,
+        "archive_id": ARCHIVE_ID,
+    }
     t0 = time.time()
     r = http.post(f"{API}/warroom/brief", json=payload, timeout=240)
     print(f"\nWar Room sift: {time.time()-t0:.1f}s, status={r.status_code}")

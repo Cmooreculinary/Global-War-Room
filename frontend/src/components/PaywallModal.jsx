@@ -89,7 +89,7 @@ export default function PaywallModal({ open, onClose, freeLimit = 5 }) {
                 Take your seat at the bench.
               </h2>
               <p className="cortex-editorial mx-auto mt-4 max-w-sm text-bone/85 italic">
-                Five verdicts on the house. Unlimited for ten dollars a month —
+                Five verdicts on the house. Unlimited for fifteen dollars, once —
                 the price of dinner, the value of every counsel you'll ever need.
               </p>
             </div>
@@ -99,7 +99,7 @@ export default function PaywallModal({ open, onClose, freeLimit = 5 }) {
               <Bullet>Unlimited verdicts. The full bench.</Bullet>
               <Bullet>Convene a court — invite witnesses.</Bullet>
               <Bullet>Voice every ruling aloud, in chamber.</Bullet>
-              <Bullet>Cancel anytime, with no script.</Bullet>
+              <Bullet>One payment. Yours for life.</Bullet>
             </ul>
 
             {/* Actions */}
@@ -126,7 +126,7 @@ export default function PaywallModal({ open, onClose, freeLimit = 5 }) {
                   e.currentTarget.style.boxShadow = "none";
                 }}
               >
-                <span className="text-base md:text-lg">Become a member — $10/mo</span>
+                <span className="text-base md:text-lg">Become a member — $15 lifetime</span>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path
                     d="M3 8 H 13 M9 4 L 13 8 L 9 12"

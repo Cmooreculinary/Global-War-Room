@@ -80,6 +80,13 @@ def test_deliberate_empty_question_400(http):
     assert r.status_code == 400
 
 
+def test_deliberate_without_session_is_rejected(http):
+    r = http.post(f"{API}/deliberate", json={
+        "chamber_id": "senate", "question": "Should we hold?"
+    }, timeout=15)
+    assert r.status_code == 401
+
+
 def test_deliberate_unknown_chamber_404(http):
     r = http.post(f"{API}/deliberate", json={
         "chamber_id": "nope", "question": "x", "archive_id": ARCHIVE_ID

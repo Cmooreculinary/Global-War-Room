@@ -1,11 +1,10 @@
 // Per-browser archive id, stored in localStorage.
 //
-// NOTE: This is **not** a security token. It is an opaque, randomly-generated
-// UUID whose only purpose is to scope which saved verdicts belong to *this*
-// browser. There is no authentication in this application — losing this id
-// simply means the user can no longer see their own archive (the verdicts
-// remain in the database, unreachable). XSS reading this id has no security
-// impact: there is nothing to exfiltrate or impersonate.
+// NOTE: This is an opaque, randomly-generated UUID. The server now requires it
+// on metered routes and uses it to count free verdicts and membership. It is
+// still not a signed credential — rotating it mints a new free quota — so
+// expensive routes are also rate-limited by IP. Losing the id means this
+// browser can no longer see its archive (the verdicts remain in the database).
 //
 // localStorage is the correct storage for this use-case: it persists across
 // tabs and sessions, which is the desired behaviour. sessionStorage would
