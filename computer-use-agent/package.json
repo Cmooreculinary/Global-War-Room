@@ -1,0 +1,21 @@
+{
+  "name": "omarchy-computer-use-agent",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Local computer-use browser agent: Chromium + Ollama vision. Built to replace the broken Downloads copy.",
+  "type": "module",
+  "bin": {
+    "cua": "src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "doctor": "node src/doctor.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "playwright": "^1.55.0"
+  }
+}
