@@ -22,6 +22,7 @@ from personas import (
     CHAMBERS,
     estimate_prompt,
     situation_sift_prompt,
+    today_utc,
     war_room_prompt,
 )
 
@@ -53,7 +54,7 @@ async def gather_sources(
     topic: str,
     pasted: str = "",
     live: bool = True,
-    window_hours: int = 24,
+    window_hours: int = 72,
     include_state: bool = False,
 ) -> tuple:
     """Collect source material from whichever intakes are in play.
@@ -97,7 +98,7 @@ def _empty_brief(topic: str, notes: list) -> dict:
         "contested_claims": [],
         "unknowns": [
             "Everything. No coverage was supplied or reachable.",
-            "Whether the situation has changed since the model's training data.",
+            "Whether the situation has changed on the open-source record since this brief was drawn.",
         ],
         "framing_removed": [],
         "actors": [],
@@ -121,7 +122,7 @@ async def build_brief(
     topic: str,
     pasted: str = "",
     live: bool = True,
-    window_hours: int = 24,
+    window_hours: int = 72,
     include_state: bool = False,
 ) -> dict:
     """Gather coverage and sift it into a neutral, sourced fact sheet."""
@@ -139,6 +140,7 @@ async def build_brief(
         }
 
     user_text = (
+        f"TODAY (UTC): {today_utc()}\n"
         f"TOPIC: {topic}\n\n"
         f"SOURCE MATERIAL ({len(items)} items across {len(provenance['spread'])} lean categories — "
         f"{', '.join(f'{k}: {v}' for k, v in provenance['spread'].items())}):\n\n"
@@ -237,7 +239,9 @@ def _normalize_board(raw: dict) -> list:
 async def convene_board(brief: dict, question: str = "") -> list:
     """Five commanders read the same brief and give their reads."""
     user_text = (
-        "THE INTELLIGENCE BRIEF — this is the entirety of what the board knows:\n\n"
+        f"TODAY (UTC): {today_utc()}\n"
+        "THE INTELLIGENCE BRIEF — this is the entirety of what the board knows. "
+        "Open-source only; do not invent classified material.\n\n"
         f"{render_brief_for_board(brief)}"
     )
     raw = await _ask_json(war_room_prompt(question), user_text, max_tokens=6000)
@@ -360,7 +364,7 @@ async def run_war_room(
     question: str = "",
     pasted: str = "",
     live: bool = True,
-    window_hours: int = 24,
+    window_hours: int = 72,
     include_state: bool = False,
     prebuilt: Optional[dict] = None,
 ) -> dict:

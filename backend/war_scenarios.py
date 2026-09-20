@@ -13,7 +13,13 @@ is just a different shape of assignment:
 So there is no "US mode" and no "China mode" in this file. There is one
 scenario engine that takes assignments, and presets in the UI that fill them in.
 """
-from personas import CHAMBERS, WARROOM_ANALYSIS_BOUNDARY, find_team
+from personas import (
+    CHAMBERS,
+    OSINT_DISCIPLINE,
+    WARROOM_ANALYSIS_BOUNDARY,
+    contemporary_grounding,
+    find_team,
+)
 from profiles import FIDELITY_RULE, render_profile
 
 
@@ -65,9 +71,10 @@ def render_assignments(assignments: list, depth: str = "auto") -> str:
 
 TEAM_RULES = """Rules for every team:
 - The three voices are not interchangeable. The leader decides, but a consul who merely agrees with his principal is a wasted seat — each was chosen for the thing he tells his leader that his leader does not want to hear.
-- Reason only from the brief and from what has already happened in this scenario. If you need a fact you do not have, say what you would need to know.
-- No anachronism games. Each figure translates his own doctrine to present conditions and names the modern instrument that does the work his old one did.
+- Reason only from the brief, from what has already happened in this scenario, and from well-established unclassified public knowledge. If you need a fact you do not have, say what you would need to know — do not invent classified, secret, or top-secret material.
+- No anachronism games. Each figure is current as of today's UTC date, translates his own doctrine to present conditions, and names the modern instrument that does the work his old one did.
 - Concrete over grand. "Move the carrier group" beats "project strength".
+- """ + OSINT_DISCIPLINE + """
 
 """ + FIDELITY_RULE
 
@@ -79,6 +86,8 @@ TEAM_RULES = """Rules for every team:
 def projection_prompt(team: dict, horizon: int = 5) -> str:
     """One team forecasts the world over the horizon."""
     return f"""You are a team in The War Room of Cerebral Cortex, working from a neutral intelligence brief.
+
+{contemporary_grounding()}
 
 {render_team(team)}
 
@@ -147,6 +156,8 @@ def scenario_opening_prompt(assignments: list, horizon: int, mode_note: str) -> 
     """Each actor's council sets doctrine, objectives and opening posture."""
     return f"""You are running a strategic exercise in The War Room of Cerebral Cortex, in the tradition of Eisenhower's Project Solarium — competing teams, identical intelligence, different strategies.
 
+{contemporary_grounding()}
+
 {mode_note}
 
 THE TABLE:
@@ -185,6 +196,8 @@ Include every actor listed above, in that order. Give 2–4 objectives and 1–3
 def scenario_year_prompt(year: int, horizon: int, assignments: list, mode_note: str) -> str:
     """One year of play: everyone moves, the moves collide, the world shifts."""
     return f"""You are adjudicating year {year} of {horizon} in a War Room exercise.
+
+{contemporary_grounding()}
 
 {mode_note}
 
@@ -235,9 +248,12 @@ def scenario_debrief_prompt(horizon: int) -> str:
     """After the last year: what happened, who read it right, what it cost."""
     return f"""You are the chief of staff of The War Room. The {horizon}-year exercise has run its course. The brief, the opening postures and every year of play are below.
 
+{contemporary_grounding()}
+
 Write the debrief. This is the part a decision-maker keeps.
 
 Rules:
+- Stay on the open-source record. Do not invent classified, secret, or top-secret material to explain an outcome.
 - Say what actually happened, including whether anyone achieved the objectives they set in turn zero. Score them against their own stated goals, not against a standard you invent now.
 - Name the turning point — the specific year and move after which the rest followed. There is usually one.
 - Say which commander's doctrine held up and which did not, and be willing to conclude that the boldest team lost. Several of these men were destroyed by their own signature move; if that happened here, say so.

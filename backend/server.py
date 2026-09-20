@@ -217,7 +217,7 @@ class WarRoomBriefRequest(BaseModel):
     topic: str
     pasted: str = ""
     live: bool = True
-    window_hours: int = Field(default=24, ge=1, le=168)
+    window_hours: int = Field(default=72, ge=1, le=168)
     include_state: bool = False
     archive_id: Optional[str] = None
 
@@ -239,7 +239,7 @@ class WarRoomConveneRequest(BaseModel):
     question: str = ""
     pasted: str = ""
     live: bool = True
-    window_hours: int = Field(default=24, ge=1, le=168)
+    window_hours: int = Field(default=72, ge=1, le=168)
     include_state: bool = False
     archive_id: Optional[str] = None
 
@@ -255,6 +255,8 @@ class ProjectionRequest(BaseModel):
     topic: Optional[str] = None
     pasted: str = ""
     live: bool = True
+    window_hours: int = Field(default=72, ge=1, le=168)
+    include_state: bool = False
     horizon_years: int = Field(default=5, ge=1, le=10)
     teams: List[str] = Field(default_factory=list)  # empty = every team
     archive_id: Optional[str] = None
@@ -265,6 +267,8 @@ class ScenarioRequest(BaseModel):
     topic: Optional[str] = None
     pasted: str = ""
     live: bool = True
+    window_hours: int = Field(default=72, ge=1, le=168)
+    include_state: bool = False
     horizon_years: int = Field(default=5, ge=1, le=10)
     assignments: List[TeamAssignment] = Field(default_factory=list)
     archive_id: Optional[str] = None
@@ -718,11 +722,18 @@ async def warroom_sources():
     """What the room can pull from, so the source list is auditable up front."""
     return {
         "live_enabled": LIVE_ENABLED,
-        "search": [{
-            "outlet": "GDELT",
-            "lean": "aggregator",
-            "note": "Topic search across worldwide coverage; each result is labelled by its own outlet.",
-        }],
+        "search": [
+            {
+                "outlet": "GDELT",
+                "lean": "aggregator",
+                "note": "Topic search across worldwide coverage; each result is labelled by its own outlet.",
+            },
+            {
+                "outlet": "Google News",
+                "lean": "aggregator",
+                "note": "Topic search across current headlines; each result is labelled by its originating outlet when the title carries one.",
+            },
+        ],
         "feeds": [
             {"outlet": o, "lean": lean, "country": country}
             for o, _url, lean, country in RSS_FEEDS
@@ -855,7 +866,12 @@ async def warroom_convene(req: WarRoomConveneRequest, _: None = Depends(rate_lim
 # ---- Team modes: projections and played-out scenarios -------------------- #
 
 async def _resolve_brief(
-    brief_id: Optional[str], topic: Optional[str], pasted: str, live: bool
+    brief_id: Optional[str],
+    topic: Optional[str],
+    pasted: str,
+    live: bool,
+    window_hours: int = 72,
+    include_state: bool = False,
 ) -> dict:
     """Reuse a brief the user has already reviewed, or build one now."""
     if brief_id:
@@ -870,7 +886,13 @@ async def _resolve_brief(
         }
     if not (topic or "").strip():
         raise HTTPException(status_code=400, detail="A topic or a brief_id is required")
-    return await build_brief(topic.strip(), pasted=pasted, live=live)
+    return await build_brief(
+        topic.strip(),
+        pasted=pasted,
+        live=live,
+        window_hours=window_hours,
+        include_state=include_state,
+    )
 
 
 async def _create_run(kind: str, topic: str, horizon: int, brief_doc: dict, **extra) -> dict:
@@ -976,7 +998,14 @@ async def warroom_projection(
     """Every team forecasts the horizon; the forecasts are then read against
     each other. Runs in the background — poll /warroom/run/{id}."""
     await _enforce_paywall(req.archive_id)
-    brief_doc = await _resolve_brief(req.brief_id, req.topic, req.pasted, req.live)
+    brief_doc = await _resolve_brief(
+        req.brief_id,
+        req.topic,
+        req.pasted,
+        req.live,
+        window_hours=req.window_hours,
+        include_state=req.include_state,
+    )
     horizon = clamp_horizon(req.horizon_years)
 
     run = await _create_run(
@@ -1009,7 +1038,14 @@ async def warroom_scenario(
             detail="Each actor needs a name and at least one team, and a team can only play one side.",
         )
 
-    brief_doc = await _resolve_brief(req.brief_id, req.topic, req.pasted, req.live)
+    brief_doc = await _resolve_brief(
+        req.brief_id,
+        req.topic,
+        req.pasted,
+        req.live,
+        window_hours=req.window_hours,
+        include_state=req.include_state,
+    )
     horizon = clamp_horizon(req.horizon_years)
 
     run = await _create_run(

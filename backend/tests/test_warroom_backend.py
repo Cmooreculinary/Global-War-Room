@@ -83,6 +83,8 @@ def test_source_registry_labels_every_feed(http):
     assert r.status_code == 200
     data = r.json()
     assert data["feeds"], "no standing feeds registered"
+    search_outlets = {s["outlet"] for s in data.get("search") or []}
+    assert {"GDELT", "Google News"} <= search_outlets
     leans = {f["lean"] for f in data["feeds"]}
     assert len(leans) >= 3, "the standing feeds must span the spectrum"
     for feed in data["feeds"]:

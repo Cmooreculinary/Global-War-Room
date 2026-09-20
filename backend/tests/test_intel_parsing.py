@@ -60,6 +60,22 @@ GDELT_JSON = {
     ]
 }
 
+GOOGLE_NEWS_RSS = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+  <title>Google News</title>
+  <item>
+    <title>Strait patrols intensify - Reuters</title>
+    <description>Officials confirmed additional transits.</description>
+    <link>https://news.google.com/rss/articles/abc</link>
+    <pubDate>Tue, 12 Aug 2026 06:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>Markets open mixed</title>
+    <description>No outlet suffix.</description>
+    <link>https://news.google.com/rss/articles/def</link>
+  </item>
+</channel></rss>"""
+
 
 def _client(handler):
     return httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -167,7 +183,11 @@ def test_one_dead_feed_does_not_sink_the_gather(monkeypatch):
             raise httpx.ConnectError("boom")
         return [intel._item(f"{outlet} on the strait", outlet, "center", f"https://{outlet}/1")]
 
+    async def no_google(*_args, **_kwargs):
+        return []
+
     monkeypatch.setattr(intel, "_fetch_gdelt", ok_gdelt)
+    monkeypatch.setattr(intel, "_fetch_google_news", no_google)
     monkeypatch.setattr(intel, "_fetch_rss", dead_rss)
 
     result = _run(intel.fetch_live("strait", window_hours=24, limit=10))
@@ -181,6 +201,7 @@ def test_total_network_failure_is_reported_not_raised(monkeypatch):
         raise httpx.ConnectError("no route to host")
 
     monkeypatch.setattr(intel, "_fetch_gdelt", dead)
+    monkeypatch.setattr(intel, "_fetch_google_news", dead)
     monkeypatch.setattr(intel, "_fetch_rss", dead)
 
     result = _run(intel.fetch_live("strait", window_hours=24, limit=10))
@@ -200,6 +221,7 @@ def test_state_media_is_excluded_unless_requested(monkeypatch):
         return []
 
     monkeypatch.setattr(intel, "_fetch_gdelt", no_gdelt)
+    monkeypatch.setattr(intel, "_fetch_google_news", no_gdelt)
     monkeypatch.setattr(intel, "_fetch_rss", spy_rss)
 
     _run(intel.fetch_live("topic", include_state=False))
@@ -208,3 +230,30 @@ def test_state_media_is_excluded_unless_requested(monkeypatch):
     called.clear()
     _run(intel.fetch_live("topic", include_state=True))
     assert any(o in ("Xinhua", "TASS") for o in called)
+
+
+def test_google_news_splits_headline_from_named_outlet():
+    async def go():
+        async with _client(lambda _r: httpx.Response(200, content=GOOGLE_NEWS_RSS.encode())) as c:
+            return await intel._fetch_google_news(c, "strait", 20, 72)
+
+    items = _run(go())
+    assert len(items) == 2
+    first = items[0]
+    assert first["title"] == "Strait patrols intensify"
+    assert first["outlet"] == "Reuters"
+    assert first["lean"] == "wire"
+    assert items[1]["outlet"] == "Google News"
+    assert items[1]["lean"] == "aggregator"
+
+
+def test_parse_feed_without_terms_keeps_every_titled_entry():
+    items = intel.parse_feed(RSS_2.encode(), "BBC News", "center", terms=None)
+    assert len(items) == 2
+
+
+def test_google_news_window_maps_to_when_operator():
+    assert intel._google_news_when(12) == "1d"
+    assert intel._google_news_when(24) == "1d"
+    assert intel._google_news_when(72) == "3d"
+    assert intel._google_news_when(168) == "7d"
