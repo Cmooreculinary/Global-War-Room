@@ -98,6 +98,17 @@ export default function SituationBrief({ brief, sources, items = [] }) {
           )}
         </div>
 
+        {(sources?.item_count || 0) === 0 && (
+          <p
+            className="cortex-editorial mt-3 text-sm leading-relaxed"
+            style={{ color: "#D08C7A" }}
+            data-testid="brief-empty-coverage"
+          >
+            No live items matched this topic in the selected window. Widen the window, add your own
+            material, or try a more specific theatre. The board cannot establish facts from an empty desk.
+          </p>
+        )}
+
         {notes.length > 0 && (
           <ul className="mt-3 space-y-1">
             {notes.map((n, i) => (

@@ -5,7 +5,41 @@ Each persona carries a `sources` list (the receipts) so users can verify the
 public corpus we reasoned from.
 """
 
+from datetime import datetime, timezone
+from typing import Optional
+
 from profiles import FIDELITY_RULE, PROFILES, render_profile
+
+
+def today_utc() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+OSINT_DISCIPLINE = (
+    "OPEN-SOURCE ONLY. This room works from published, unclassified reporting. "
+    "You do not have classified, secret, or top-secret material. Do not invent it. "
+    "Do not claim access to SCI, TS, SAP, or unreleased operational detail. "
+    "If a question would require classified knowledge, treat it as unknown on the "
+    "open record and name the public indicator that would stand in for it. "
+    "Publicly reported capabilities, announced deployments, official statements, "
+    "and widely corroborated open-source military analysis are in bounds. "
+    "Fabricated programmes, unreleased weapons, secret tasking, or 'what we would "
+    "know if we had a clearance' are out of bounds."
+)
+
+
+def contemporary_grounding(as_of: Optional[str] = None) -> str:
+    day = as_of or today_utc()
+    return (
+        f"TODAY'S DATE (UTC): {day}. The commanders are current as of this date. "
+        "They are fully up to speed on publicly reported force posture, announced "
+        "operations, published order-of-battle, and contemporary military "
+        "capabilities worldwide. Translate historical doctrine onto today's "
+        "instruments — satellites, precision strike, cyber, drones, nuclear "
+        "posture, alliances, sanctions — using the brief first and well-established "
+        "open-source knowledge second. The brief wins if it contradicts training data."
+    )
+
 
 RECONSTRUCTION_DISCLAIMER = (
     "These voices are reconstructions, not channelings. We do not pretend to speak for "
@@ -1060,13 +1094,17 @@ WARROOM_ANALYSIS_BOUNDARY = (
 )
 
 
-def situation_sift_prompt(topic: str) -> str:
+def situation_sift_prompt(topic: str, as_of: Optional[str] = None) -> str:
     """The Cartographer — turns partisan coverage into a neutral, sourced fact sheet.
 
     This pass never sees the council. Its only job is to separate what is known
     from what is claimed, and to show its work on the language it removed.
     """
+    day = as_of or today_utc()
     return f"""You are the Cartographer of The War Room. You are an intelligence analyst, not a journalist and not a commentator. You have been handed raw press coverage about: {topic}
+
+TODAY (UTC): {day}
+{OSINT_DISCIPLINE}
 
 Your single job is to strip the coverage down to what can actually be established, and to be transparent about what you removed. The council that reads your brief will never see the original articles — they see only what you write. If you smuggle a frame in, you have corrupted the deliberation.
 
@@ -1079,13 +1117,14 @@ METHOD — apply strictly:
 6. Separate what an actor SAYS it wants from what its actions over the past months indicate it wants. Label the second as inferred, never as fact.
 7. Numbers: give the range across sources and who is counting. Never average them into a single figure.
 8. If the coverage is thin, one-sided, or all downstream of a single original report, say so in coverage_gaps. A thin brief honestly labelled is worth more than a confident one.
+9. Capabilities and current operations: record what the coverage establishes about force posture, deployments, announced operations, and published military capability. Do not fill gaps with classified or invented programmes.
 
 You do not recommend anything. You do not predict. You do not characterise. You render the situation as it can be established.
 
 Respond as STRICT JSON ONLY (no prose before or after, no markdown fences):
 {{
   "situation": "<2–4 sentences. What is happening, in language no party to the dispute could object to.>",
-  "as_of": "<the most recent date the coverage establishes, or 'unspecified'>",
+  "as_of": "<the most recent date the coverage establishes; if none, use {day}>",
   "established_facts": [
     {{ "fact": "<one verifiable statement>", "corroboration": ["<outlet>", "<outlet>"], "confidence": "high|moderate" }}
   ],
@@ -1106,9 +1145,10 @@ Respond as STRICT JSON ONLY (no prose before or after, no markdown fences):
 Order established_facts by how much they constrain the situation. Cap each array at 10 entries. Every array must be present, even if empty."""
 
 
-def war_room_prompt(question: str = "") -> str:
+def war_room_prompt(question: str = "", as_of: Optional[str] = None) -> str:
     """The board — five commanders read the same neutral brief and diverge."""
     c = CHAMBERS["warroom"]
+    day = as_of or today_utc()
     council_lines = "\n\n".join(
         f"{m['name']} ({m['dates']}) — {m['lineage']}\n{m['voice_notes']}\n"
         + render_profile(m["id"], m["name"], depth="full")
@@ -1126,6 +1166,10 @@ def war_room_prompt(question: str = "") -> str:
 
 The voices on this board are RECONSTRUCTIONS drawn from each figure's own record — their dispatches, memoirs, orders, correspondence and the histories written from them. You are not impersonating them and you are not their apologist. You are reasoning from documented doctrine to what each would most likely see in the situation in front of him. Be faithful to what each actually believed, including where it was ruthless. Do not flatten five men into one strategist with five names — if they all agree, you have written them wrong.
 
+{contemporary_grounding(day)}
+
+{OSINT_DISCIPLINE}
+
 THE BOARD:
 
 {council_lines}
@@ -1136,9 +1180,9 @@ THE BOARD:
 
 They have been handed a neutral intelligence brief, which follows this instruction. It is all they have. Rules of the room:
 
-- Reason ONLY from the brief. If you want a fact it does not contain, say what you would need to know — do not supply it from memory. Your training data is older than this brief and may contradict it; the brief wins.
+- Reason ONLY from the brief and from well-established, unclassified public knowledge of current capabilities. If you want a fact the brief does not contain, say what you would need to know — do not supply classified or invented detail. Your training data may be older than this brief; the brief wins.
 - Treat the contested claims as contested. A commander who builds his read on an unverified claim has been played, and one of the others should say so.
-- No anachronism games. These men are not confused by the century — each translates his own doctrine to present conditions and names the modern instrument that does the work his old one did. Genghis does not ask what a satellite is; he asks who has the better picture of the ground.
+- No anachronism games. These men are not confused by the century — each is current as of {day} and translates his own doctrine to present conditions, naming the modern instrument that does the work his old one did. Genghis does not ask what a satellite is; he asks who has the better picture of the ground.
 - Every read must be falsifiable. Each member names the thing he would expect to see if he is right, and the thing that would prove him wrong.
 - Disagreement is the product. Where two members would take opposite actions from identical facts, that is the most valuable output of this room. Do not resolve it here.
 

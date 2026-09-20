@@ -65,7 +65,7 @@ export default function WarRoomPage() {
   const [pasted, setPasted] = useState("");
   const [showPaste, setShowPaste] = useState(false);
   const [live, setLive] = useState(true);
-  const [windowHours, setWindowHours] = useState(24);
+  const [windowHours, setWindowHours] = useState(72);
   const [includeState, setIncludeState] = useState(false);
 
   const [briefDoc, setBriefDoc] = useState(null);
@@ -99,7 +99,7 @@ export default function WarRoomPage() {
   useEffect(() => () => cancelPollRef.current?.(), []);
 
   const busy = phase === PHASES.SIFTING || phase === PHASES.CONVENING;
-  const canSift = topic.trim().length > 2 && !busy;
+  const canSift = topic.trim().length >= 2 && !busy;
 
   const onError = (e, fallback) => {
     if (e?.response?.status === 402) {
@@ -234,7 +234,7 @@ export default function WarRoomPage() {
               onChange={(e) => setTopic(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && canSift && onSift()}
               disabled={busy}
-              placeholder="A theatre, a crisis, a rivalry — e.g. the Taiwan Strait"
+              placeholder="A theatre, a crisis, a rivalry — e.g. US, Red Sea, Taiwan Strait"
               className="cortex-editorial mt-2 block w-full border bg-transparent px-5 py-4 text-lg text-bone placeholder:text-ash focus:outline-none"
               style={{ borderColor: `${t.accent}55`, borderRadius: 2, background: "rgba(20,20,28,0.6)" }}
               data-testid="warroom-topic-input"
@@ -343,6 +343,10 @@ export default function WarRoomPage() {
                 </button>
               )}
             </div>
+            <p className="cortex-editorial mt-3 max-w-xl text-xs leading-relaxed text-ash">
+              Open-source desk only — GDELT, Google News, and the standing wires, including defense reporting.
+              The room does not ingest classified, secret, or top-secret material.
+            </p>
 
             {error && (
               <p className="cortex-editorial mt-5 text-sm" style={{ color: "#D08C7A" }} data-testid="warroom-error">
@@ -477,9 +481,10 @@ export default function WarRoomPage() {
             </div>
 
             <p className="cortex-editorial mt-10 max-w-3xl text-xs leading-relaxed text-ash">
-              These are reconstructions, not channelings. Five men who are long dead cannot know today's
-              conditions; the room reasons from their documented doctrine to what each would most likely see.
-              The estimate is an argument, not a forecast — and no better than the brief it was drawn from.
+              These are reconstructions, not channelings. The board is brought current from today's
+              open-source coverage — published force posture and announced operations only. The room does
+              not have, and will not invent, classified or secret material. The estimate is an argument,
+              not a forecast — and no better than the brief it was drawn from.
             </p>
           </motion.section>
         )}
@@ -662,9 +667,13 @@ function SourceRegistry({ registry }) {
             </p>
           )}
           <p className="smallcaps text-ash">Topic search</p>
-          <p className="cortex-editorial mt-1 text-xs leading-relaxed text-bone/70">
-            {registry.search?.[0]?.note}
-          </p>
+          <div className="mt-1 space-y-1.5">
+            {(registry.search || []).map((s) => (
+              <p key={s.outlet} className="cortex-editorial text-xs leading-relaxed text-bone/70">
+                <span className="smallcaps text-bone/80">{s.outlet}.</span> {s.note}
+              </p>
+            ))}
+          </div>
           <p className="smallcaps mt-4 text-ash">Standing feeds</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {feeds.map((f) => (

@@ -126,7 +126,7 @@ export async function fetchWarRoomSources() {
   return data; // { live_enabled, search, feeds, state_feeds, note }
 }
 
-export async function buildWarRoomBrief({ topic, pasted = "", live = true, windowHours = 24, includeState = false }) {
+export async function buildWarRoomBrief({ topic, pasted = "", live = true, windowHours = 72, includeState = false }) {
   const { data } = await http.post(
     `/warroom/brief`,
     {

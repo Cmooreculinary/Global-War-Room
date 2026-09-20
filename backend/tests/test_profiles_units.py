@@ -5,9 +5,23 @@ the differentiating parts are actually present and actually reach the prompts.
 """
 import pytest
 
-from personas import CHAMBERS, find_team, team_ids, war_room_prompt
+from personas import (
+    CHAMBERS,
+    OSINT_DISCIPLINE,
+    find_team,
+    situation_sift_prompt,
+    team_ids,
+    today_utc,
+    war_room_prompt,
+)
 from profiles import FIDELITY_RULE, PROFILES, render_profile
-from war_scenarios import projection_prompt, render_assignments, render_team, scenario_year_prompt
+from war_scenarios import (
+    TEAM_RULES,
+    projection_prompt,
+    render_assignments,
+    render_team,
+    scenario_year_prompt,
+)
 
 LEADERS = ["alexander", "genghis", "napoleon", "churchill_war", "eisenhower"]
 CONSULS = [
@@ -125,6 +139,18 @@ def test_the_board_prompt_carries_every_commanders_sheet():
         marker = PROFILES[fid]["reads_first"][:40]
         assert marker in prompt, f"{fid}'s sheet did not reach the board prompt"
     assert FIDELITY_RULE.splitlines()[0] in prompt
+
+
+def test_sift_and_board_prompts_are_dated_and_unclassified():
+    day = today_utc()
+    sift = situation_sift_prompt("Taiwan Strait")
+    board = war_room_prompt("What happens next?")
+    assert day in sift and day in board
+    assert "OPEN-SOURCE ONLY" in sift and "OPEN-SOURCE ONLY" in board
+    assert "classified" in sift.lower() and "classified" in board.lower()
+    assert "top-secret" in OSINT_DISCIPLINE.lower()
+    assert "do not invent" in OSINT_DISCIPLINE.lower()
+    assert "classified" in TEAM_RULES.lower()
 
 
 def test_the_fidelity_rule_forbids_correcting_the_blind_spots():

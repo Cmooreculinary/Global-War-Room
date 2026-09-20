@@ -1,7 +1,7 @@
 """Intelligence intake for The War Room.
 
 Two ways in:
-  * live  — pull today's coverage from free, key-less sources (GDELT + RSS)
+  * live  — pull today's coverage from free, key-less sources (GDELT + Google News + RSS)
   * paste — the user supplies the raw material (articles, cables, transcripts)
 
 Everything that comes out of here carries an outlet and a declared political
@@ -24,15 +24,18 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-USER_AGENT = "CerebralCortex-WarRoom/1.0 (+strategic analysis; contact via app)"
-FETCH_TIMEOUT = float(os.environ.get("WARROOM_FETCH_TIMEOUT", "12"))
-MAX_ITEMS = int(os.environ.get("WARROOM_MAX_ITEMS", "28"))
+USER_AGENT = os.environ.get(
+    "WARROOM_USER_AGENT",
+    "Mozilla/5.0 (compatible; GlobalWarRoom/1.1; +https://theverdictai.vercel.app)",
+)
+FETCH_TIMEOUT = float(os.environ.get("WARROOM_FETCH_TIMEOUT", "18"))
+MAX_ITEMS = int(os.environ.get("WARROOM_MAX_ITEMS", "40"))
 MAX_PASTED_CHARS = int(os.environ.get("WARROOM_MAX_PASTED_CHARS", "60000"))
 LIVE_ENABLED = os.environ.get("WARROOM_LIVE_SOURCES", "1") not in ("0", "false", "False")
 
 # Lean labels are coarse on purpose. They exist so the sifter can notice that a
 # framing is carried only by one side of the spectrum — not to rank outlets.
-LEANS = ("wire", "left", "center-left", "center", "center-right", "right", "international", "state")
+LEANS = ("wire", "left", "center-left", "center", "center-right", "right", "international", "state", "aggregator")
 
 
 # --------------------------------------------------------------------------- #
@@ -51,6 +54,10 @@ RSS_FEEDS = [
     ("The Times of India", "https://timesofindia.indiatimes.com/rssfeedstopstories.cms", "international", "India"),
     ("CBC News", "https://www.cbc.ca/webfeed/rss/rss-world", "center-left", "Canada"),
     ("The Japan Times", "https://www.japantimes.co.jp/feed/", "international", "Japan"),
+    # Defense / force-posture wires — topic-filtered like the others.
+    ("Defense News", "https://www.defensenews.com/arc/outboundfeeds/rss/?outputType=xml", "center", "US"),
+    ("Breaking Defense", "https://breakingdefense.com/feed/", "center", "US"),
+    ("The War Zone", "https://www.twz.com/feed", "center", "US"),
 ]
 
 # State-controlled outlets. Off by default: they are analytically useful for
@@ -106,6 +113,13 @@ STOPWORDS = {
     "where", "which", "while", "after", "before", "between", "against", "under",
 }
 
+# Two-letter tokens that are real topics. The old 3-letter floor dropped
+# "US", "UK", "EU", "AI" and then every RSS item, leaving only GDELT.
+KEEP_TERMS = {
+    "us", "uk", "eu", "un", "ai", "ua", "ru", "cn", "ir", "nk", "idf", "pla",
+    "nato", "isis", "houthis",
+}
+
 
 # --------------------------------------------------------------------------- #
 # Helpers                                                                     #
@@ -123,15 +137,41 @@ def _clean(text: Optional[str], limit: int = 600) -> str:
 
 def topic_terms(topic: str) -> list:
     """Significant terms from a topic string, for relevance filtering."""
-    words = re.findall(r"[a-zA-Z][a-zA-Z'\-]{2,}", (topic or "").lower())
-    return [w for w in words if w not in STOPWORDS]
+    words = re.findall(r"[a-zA-Z][a-zA-Z'\-]{1,}", (topic or "").lower())
+    out = []
+    for w in words:
+        if w in STOPWORDS:
+            continue
+        if len(w) >= 3 or w in KEEP_TERMS:
+            out.append(w)
+    return out
 
 
-def _is_relevant(text: str, terms: Iterable[str], threshold: int = 1) -> bool:
+def _is_relevant(text: str, terms: Iterable[str], threshold: Optional[int] = None) -> bool:
+    """Match topic terms without letting 'red' hit 'murdered' or 'US' hit 'status'.
+
+    One-term topics need a single hit. Two-or-more-term topics (Red Sea,
+    Taiwan Strait) need two hits so a lone shared noun cannot flood the desk.
+    Tokens of three letters or fewer match as whole words.
+    """
+    terms = [t for t in terms if t]
     if not terms:
         return False
+    if threshold is None:
+        threshold = 2 if len(terms) >= 2 else 1
+        threshold = min(threshold, len(terms))
     haystack = text.lower()
-    return sum(1 for t in terms if t in haystack) >= threshold
+    hits = 0
+    for t in terms:
+        if len(t) <= 3:
+            found = re.search(rf"\b{re.escape(t)}\b", haystack)
+        else:
+            found = t in haystack
+        if found:
+            hits += 1
+        if hits >= threshold:
+            return True
+    return False
 
 
 def _outlet_for_domain(domain: str) -> tuple:
@@ -232,7 +272,12 @@ async def _fetch_rss(client: httpx.AsyncClient, outlet: str, url: str, lean: str
     """Pull one feed and keep the entries that touch the topic."""
     r = await client.get(url)
     r.raise_for_status()
-    root = ET.fromstring(r.content)
+    return parse_feed(r.content, outlet, lean, terms)
+
+
+def parse_feed(content: bytes, outlet: str, lean: str, terms: Optional[list] = None) -> list:
+    """Parse RSS / Atom / RDF bytes. terms=None keeps every titled entry."""
+    root = ET.fromstring(content)
     ns = {"atom": "http://www.w3.org/2005/Atom", "rdf": "http://purl.org/rss/1.0/"}
 
     nodes = root.findall(".//item") or root.findall(".//rdf:item", ns) or root.findall(".//atom:entry", ns)
@@ -261,9 +306,50 @@ async def _fetch_rss(client: httpx.AsyncClient, outlet: str, url: str, lean: str
         ))
         if not title:
             continue
-        if not _is_relevant(f"{title} {summary}", terms):
+        if terms is not None and not _is_relevant(f"{title} {summary}", terms):
             continue
         items.append(_item(title, outlet, lean, link, published, summary))
+    return items
+
+
+GOOGLE_NEWS_TITLE = re.compile(r"^(?P<title>.+?)\s+-\s+(?P<source>.+)$")
+
+
+def _google_news_when(window_hours: int) -> str:
+    if window_hours <= 24:
+        return "1d"
+    if window_hours <= 72:
+        return "3d"
+    return "7d"
+
+
+async def _fetch_google_news(
+    client: httpx.AsyncClient,
+    topic: str,
+    limit: int,
+    window_hours: int = 72,
+) -> list:
+    """Topic search against Google News RSS — the live desk when GDELT is thin."""
+    query = " ".join((topic or "").split())[:180]
+    if not query:
+        return []
+    url = (
+        "https://news.google.com/rss/search"
+        f"?q={quote_plus(query)}+when:{_google_news_when(window_hours)}"
+        "&hl=en-US&gl=US&ceid=US:en"
+    )
+    r = await client.get(url)
+    r.raise_for_status()
+    raw = parse_feed(r.content, "Google News", "aggregator", terms=None)
+    items = []
+    for it in raw[: max(limit, 1)]:
+        title, outlet, lean = it["title"], it["outlet"], it["lean"]
+        m = GOOGLE_NEWS_TITLE.match(title)
+        if m:
+            title = m.group("title").strip()
+            outlet = m.group("source").strip() or outlet
+            lean = _lean_for_named_outlet(outlet)
+        items.append(_item(title, outlet, lean, it.get("url", ""), it.get("published", ""), it.get("summary", "")))
     return items
 
 
@@ -277,7 +363,7 @@ def _node_text(node, tags: Iterable[str]) -> str:
 
 async def fetch_live(
     topic: str,
-    window_hours: int = 24,
+    window_hours: int = 72,
     limit: int = MAX_ITEMS,
     include_state: bool = False,
 ) -> dict:
@@ -298,9 +384,12 @@ async def fetch_live(
         follow_redirects=True,
         headers={"User-Agent": USER_AGENT},
     ) as client:
-        tasks = [_fetch_gdelt(client, topic, window_hours, limit)]
+        tasks = [
+            _fetch_gdelt(client, topic, window_hours, limit),
+            _fetch_google_news(client, topic, limit, window_hours),
+        ]
         tasks += [_fetch_rss(client, outlet, url, lean, terms) for outlet, url, lean, _ in feeds]
-        labels = ["GDELT"] + [outlet for outlet, *_ in feeds]
+        labels = ["GDELT", "Google News"] + [outlet for outlet, *_ in feeds]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
     items, failures = [], []
@@ -442,6 +531,7 @@ __all__ = [
     "fetch_live",
     "gather_summary",
     "normalize_pasted",
+    "parse_feed",
     "public_items",
     "render_source_block",
     "source_spread",

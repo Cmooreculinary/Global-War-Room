@@ -61,6 +61,35 @@ def test_topic_terms_drop_stopwords():
     assert "the" not in terms and "will" not in terms
 
 
+def test_topic_terms_keep_short_geopolitical_tokens():
+    assert intel.topic_terms("US") == ["us"]
+    assert intel.topic_terms("UK") == ["uk"]
+    assert intel.topic_terms("EU") == ["eu"]
+    assert intel.topic_terms("AI") == ["ai"]
+    assert "nato" in intel.topic_terms("NATO posture")
+
+
+def test_short_topic_matches_as_a_word_not_a_substring():
+    terms = intel.topic_terms("US")
+    assert intel._is_relevant("US Navy transits the strait", terms)
+    assert not intel._is_relevant("A consensus formed overnight", terms)
+    assert not intel._is_relevant("status of forces agreement", terms)
+
+
+def test_multiword_topics_need_more_than_a_shared_noun():
+    red_sea = intel.topic_terms("Red Sea")
+    assert intel._is_relevant("Italy calls for more ships to protect Red Sea navigation", red_sea)
+    assert not intel._is_relevant("Grim discoveries of murdered women spark fear", red_sea)
+    taiwan = intel.topic_terms("Taiwan Strait")
+    assert intel._is_relevant("Taiwan reports naval activity in the strait", taiwan)
+    assert not intel._is_relevant("Houthis stranglehold on the Bab Al-Mandab Strait grows", taiwan)
+
+
+def test_standing_feeds_include_defense_wires():
+    outlets = {o for o, *_ in intel.RSS_FEEDS}
+    assert {"Defense News", "Breaking Defense", "The War Zone"} <= outlets
+
+
 def test_dedupe_collapses_wire_copy_across_outlets():
     items = [
         intel._item("Talks collapse in Geneva", "Reuters", "wire", "https://reuters.com/a"),
