@@ -147,17 +147,27 @@ def topic_terms(topic: str) -> list:
     return out
 
 
-def _is_relevant(text: str, terms: Iterable[str], threshold: int = 1) -> bool:
-    """Short tokens (US, UK, AI) must match as words, not as letters inside others."""
+def _is_relevant(text: str, terms: Iterable[str], threshold: Optional[int] = None) -> bool:
+    """Match topic terms without letting 'red' hit 'murdered' or 'US' hit 'status'.
+
+    One-term topics need a single hit. Two-or-more-term topics (Red Sea,
+    Taiwan Strait) need two hits so a lone shared noun cannot flood the desk.
+    Tokens of three letters or fewer match as whole words.
+    """
+    terms = [t for t in terms if t]
     if not terms:
         return False
+    if threshold is None:
+        threshold = 2 if len(terms) >= 2 else 1
+        threshold = min(threshold, len(terms))
     haystack = text.lower()
     hits = 0
     for t in terms:
-        if len(t) <= 2:
-            if re.search(rf"\b{re.escape(t)}\b", haystack):
-                hits += 1
-        elif t in haystack:
+        if len(t) <= 3:
+            found = re.search(rf"\b{re.escape(t)}\b", haystack)
+        else:
+            found = t in haystack
+        if found:
             hits += 1
         if hits >= threshold:
             return True

@@ -76,6 +76,15 @@ def test_short_topic_matches_as_a_word_not_a_substring():
     assert not intel._is_relevant("status of forces agreement", terms)
 
 
+def test_multiword_topics_need_more_than_a_shared_noun():
+    red_sea = intel.topic_terms("Red Sea")
+    assert intel._is_relevant("Italy calls for more ships to protect Red Sea navigation", red_sea)
+    assert not intel._is_relevant("Grim discoveries of murdered women spark fear", red_sea)
+    taiwan = intel.topic_terms("Taiwan Strait")
+    assert intel._is_relevant("Taiwan reports naval activity in the strait", taiwan)
+    assert not intel._is_relevant("Houthis stranglehold on the Bab Al-Mandab Strait grows", taiwan)
+
+
 def test_standing_feeds_include_defense_wires():
     outlets = {o for o, *_ in intel.RSS_FEEDS}
     assert {"Defense News", "Breaking Defense", "The War Zone"} <= outlets
