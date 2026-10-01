@@ -1,0 +1,13 @@
+.git
+**/.git
+**/node_modules
+**/.venv
+**/__pycache__
+**/.env
+**/.env.*
+frontend/build
+**/*.pyc
+memory
+test_reports
+computer-use-agent
+.cursor

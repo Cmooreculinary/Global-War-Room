@@ -60,6 +60,19 @@ yarn install
 yarn start          # http://localhost:3000
 ```
 
+## Deploy (one container)
+
+`Dockerfile` builds the frontend and serves it with the API on `$PORT`
+(default `7860`). The image does not contain secrets. Set these on the host:
+
+- `MONGO_URL` — MongoDB connection string
+- `DB_NAME` — `global_war_room`
+- `ANTHROPIC_API_KEY` — deliberations and the War Room
+- `PUBLIC_BASE_URL` — the public origin, used by Stripe return URLs
+
+`OPENAI_API_KEY` is only required for voice. Stripe keys are only required
+for membership checkout.
+
 ## Single URL (one server)
 
 Serve the compiled frontend and the API from one origin — handy for a single
